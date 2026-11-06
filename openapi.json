@@ -606,6 +606,218 @@
         },
         "description": "Self or administrator target reset; immediately revokes the previous API token, preserves browser sessions. Token has no automatic expiry."
       }
+    },
+    "/_/api/v1/pages": {
+      "post": {
+        "operationId": "publishPage",
+        "description": "Publish immediately as the authenticated owner. Request body bounded at 8 MiB for JSON escaping overhead. Content responses use Cache-Control: no-store.",
+        "security": [
+          {
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Published page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON, UTF-8, slug, or query parameters"
+          },
+          "401": {
+            "description": "Missing or invalid authentication"
+          },
+          "409": {
+            "description": "Custom slug already occupied"
+          },
+          "413": {
+            "description": "Markdown exceeds 1 MiB or request exceeds 8 MiB"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          },
+          "403": {
+            "description": "Permission or CSRF header required"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Pagelet-CSRF",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "const": "1"
+            },
+            "description": "Required for cookie-authenticated mutations."
+          }
+        ]
+      },
+      "get": {
+        "operationId": "listPages",
+        "description": "Metadata only. Ordinary users see only their pages; administrators see all and may filter owner_id. Literal slug substring search. Ordered by updated_at descending, then id descending.",
+        "security": [
+          {
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 20,
+              "description": "Values above 100 are capped at 100."
+            }
+          },
+          {
+            "name": "owner_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated page metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON, UTF-8, slug, or query parameters"
+          },
+          "401": {
+            "description": "Missing or invalid authentication"
+          },
+          "403": {
+            "description": "Ordinary user requested another owner"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          }
+        }
+      }
+    },
+    "/_/api/v1/pages/by-slug/{slug}": {
+      "get": {
+        "operationId": "readPage",
+        "description": "Public Markdown source and metadata; Cache-Control: no-store. No rendered HTML.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page source and metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Page not found"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          }
+        }
+      }
+    },
+    "/_/raw/{slug}": {
+      "get": {
+        "operationId": "readRawPage",
+        "description": "Public Markdown, Cache-Control: no-store and X-Content-Type-Options: nosniff.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unrendered Markdown",
+            "content": {
+              "text/plain; charset=utf-8": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Page not found"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -795,6 +1007,126 @@
         ],
         "properties": {
           "id": {
+            "type": "integer"
+          }
+        }
+      },
+      "PageMetadata": {
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "owner_id",
+          "created_at",
+          "updated_at",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Immutable page identifier"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "owner_id": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "integer",
+            "description": "Unix milliseconds"
+          },
+          "updated_at": {
+            "type": "integer",
+            "description": "Unix milliseconds"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "Page": {
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "owner_id",
+          "created_at",
+          "updated_at",
+          "version",
+          "markdown"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Immutable page identifier"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "owner_id": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "integer",
+            "description": "Unix milliseconds"
+          },
+          "updated_at": {
+            "type": "integer",
+            "description": "Unix milliseconds"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "markdown": {
+            "type": "string"
+          }
+        }
+      },
+      "CreatePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "markdown"
+        ],
+        "properties": {
+          "markdown": {
+            "type": "string",
+            "description": "Valid UTF-8, up to 1048576 bytes; empty content is published immediately."
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+            "description": "Omit for a random 12-character lowercase alphanumeric slug. Collisions are retried."
+          }
+        }
+      },
+      "PageList": {
+        "type": "object",
+        "required": [
+          "pages",
+          "total",
+          "page",
+          "per_page"
+        ],
+        "properties": {
+          "pages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PageMetadata"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "per_page": {
             "type": "integer"
           }
         }

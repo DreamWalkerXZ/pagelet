@@ -1,3 +1,4 @@
+mod pages;
 mod sessions;
 mod users;
 
@@ -26,6 +27,7 @@ pub struct AppState {
     pub db: Arc<Mutex<Connection>>,
     pub clock: Arc<dyn Fn() -> i64 + Send + Sync>,
     pub limits: Arc<Mutex<sessions::RateLimiter>>,
+    pub slug_generator: Arc<dyn Fn() -> String + Send + Sync>,
 }
 
 #[derive(Serialize)]
@@ -58,6 +60,20 @@ impl AppState {
             ); PRAGMA user_version = 1;",
             )?;
         }
+        if version < 2 {
+            transaction.execute_batch(
+                "CREATE TABLE pages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug TEXT NOT NULL UNIQUE,
+                markdown TEXT NOT NULL,
+                owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                version INTEGER NOT NULL DEFAULT 1,
+                access_password_hash TEXT
+            ); PRAGMA user_version = 2;",
+            )?;
+        }
         if version < 3 {
             transaction.execute_batch("CREATE TABLE sessions (token_hash BLOB PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL); PRAGMA user_version = 3;")?;
         }
@@ -71,6 +87,7 @@ impl AppState {
                     .as_secs() as i64
             }),
             limits: Arc::new(Mutex::new(sessions::RateLimiter::default())),
+            slug_generator: Arc::new(pages::random_slug),
         })
     }
 
@@ -152,19 +169,27 @@ pub fn token_hash(token: &str) -> Vec<u8> {
 }
 
 pub fn authenticated_user(state: &AppState, headers: &HeaderMap) -> Result<Account, StatusCode> {
-    if !headers.contains_key("authorization") {
-        return sessions::authenticate(state, headers);
-    }
-    let token = headers
-        .get("authorization")
-        .and_then(|header| header.to_str().ok())
-        .and_then(|header| header.strip_prefix("Bearer "))
-        .filter(|token| !token.is_empty())
-        .ok_or(StatusCode::UNAUTHORIZED)?;
     let db = state
         .db
         .lock()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    authenticated_user_in(&db, headers, (state.clock)())
+}
+
+pub fn authenticated_user_in(
+    db: &Connection,
+    headers: &HeaderMap,
+    now: i64,
+) -> Result<Account, StatusCode> {
+    if !headers.contains_key("authorization") {
+        return sessions::authenticate_in(db, headers, now);
+    }
+    let token = headers
+        .get("authorization")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|h| h.strip_prefix("Bearer "))
+        .filter(|t| !t.is_empty())
+        .ok_or(StatusCode::UNAUTHORIZED)?;
     db.query_row(
         "SELECT id, username, role FROM users WHERE token_hash = ?1",
         [token_hash(token)],
@@ -193,6 +218,14 @@ pub fn router(state: AppState) -> Router {
         .route("/_/api/v1/me", get(me))
         .merge(sessions::routes())
         .route("/_/api/v1/users", get(users::list).post(users::create))
+        .route(
+            "/_/api/v1/pages",
+            get(pages::list)
+                .post(pages::create)
+                .layer(axum::extract::DefaultBodyLimit::max(8 * 1024 * 1024)),
+        )
+        .route("/_/api/v1/pages/by-slug/{slug}", get(pages::read))
+        .route("/_/raw/{slug}", get(pages::raw))
         .route("/_/openapi.json", get(|| async { Json(openapi()) }))
         .layer(axum::middleware::from_fn(sessions::csrf))
         .with_state(state)

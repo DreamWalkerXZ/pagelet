@@ -1,5 +1,6 @@
 use crate::{
-    Account, AppState, authenticated_user, hash_password, new_token, token_hash, validate_password,
+    Account, AppState, authenticated_user, authenticated_user_in, hash_password, new_token,
+    token_hash, validate_password,
 };
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use axum::{
@@ -75,14 +76,20 @@ fn cookie(headers: &HeaderMap) -> Option<&str> {
         .split(';')
         .find_map(|v| v.trim().strip_prefix("pagelet_session="))
 }
-pub(crate) fn authenticate(state: &AppState, headers: &HeaderMap) -> Result<Account, StatusCode> {
+pub(crate) fn authenticate_in(
+    db: &rusqlite::Connection,
+    headers: &HeaderMap,
+    now: i64,
+) -> Result<Account, StatusCode> {
     let token = cookie(headers).ok_or(StatusCode::UNAUTHORIZED)?;
-    let db = state
-        .db
-        .lock()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    db.query_row("SELECT u.id,u.username,u.role FROM users u JOIN sessions s ON u.id=s.user_id WHERE s.token_hash=?1 AND s.expires_at>?2",params![token_hash(token),(state.clock)()],|r|Ok(Account{id:r.get(0)?,username:r.get(1)?,role:r.get(2)?})).optional().map_err(|_|StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::UNAUTHORIZED)
+    db.query_row(
+        "SELECT u.id, u.username, u.role FROM users u JOIN sessions s ON u.id=s.user_id WHERE s.token_hash=?1 AND s.expires_at>?2",
+        params![token_hash(token), now], |row| {
+            Ok(Account { id: row.get(0)?, username: row.get(1)?, role: row.get(2)? })
+        }
+    ).optional().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::UNAUTHORIZED)
 }
+
 fn verified(password: &str, hash: &str) -> bool {
     PasswordHash::new(hash).is_ok_and(|h| {
         Argon2::default()
@@ -194,6 +201,7 @@ async fn change_password(
         &state,
         actor.id,
         &body.password,
+        Some(&headers),
         Some(
             body.current_password
                 .as_deref()
@@ -211,12 +219,14 @@ async fn reset_password(
     if authenticated_user(&state, &headers)?.role != "administrator" {
         return Err(StatusCode::FORBIDDEN);
     }
-    replace_password(&state, id, &body.password, None).map(|token| Json(json!({"token":token})))
+    replace_password(&state, id, &body.password, Some(&headers), None)
+        .map(|token| Json(json!({"token":token})))
 }
 fn replace_password(
     state: &AppState,
     id: i64,
     password: &str,
+    headers: Option<&HeaderMap>,
     current: Option<&str>,
 ) -> Result<String, StatusCode> {
     validate_password(password).map_err(|_| StatusCode::BAD_REQUEST)?;
@@ -244,6 +254,14 @@ fn replace_password(
     let tx = db
         .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if let Some(headers) = headers {
+        let actor = authenticated_user_in(&tx, headers, (state.clock)())?;
+        if (current.is_some() && actor.id != id)
+            || (current.is_none() && actor.role != "administrator")
+        {
+            return Err(StatusCode::FORBIDDEN);
+        }
+    }
     if tx
         .execute(
             "UPDATE users SET password_hash=?1,token_hash=?2 WHERE id=?3 AND password_hash=?4",
@@ -264,7 +282,7 @@ async fn own_token(
     headers: HeaderMap,
 ) -> Result<Json<Value>, StatusCode> {
     let actor = authenticated_user(&state, &headers)?;
-    rotate(&state, actor.id)
+    rotate(&state, actor.id, &headers)
 }
 async fn user_token(
     State(state): State<AppState>,
@@ -275,14 +293,22 @@ async fn user_token(
     if actor.id != id && actor.role != "administrator" {
         return Err(StatusCode::FORBIDDEN);
     }
-    rotate(&state, id)
+    rotate(&state, id, &headers)
 }
-fn rotate(state: &AppState, id: i64) -> Result<Json<Value>, StatusCode> {
+fn rotate(state: &AppState, id: i64, headers: &HeaderMap) -> Result<Json<Value>, StatusCode> {
     let token = new_token();
-    if state
+    let mut db = state
         .db
         .lock()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let tx = db
+        .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let actor = authenticated_user_in(&tx, headers, (state.clock)())?;
+    if actor.id != id && actor.role != "administrator" {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if tx
         .execute(
             "UPDATE users SET token_hash=?1 WHERE id=?2",
             params![token_hash(&token), id],
@@ -292,6 +318,7 @@ fn rotate(state: &AppState, id: i64) -> Result<Json<Value>, StatusCode> {
     {
         return Err(StatusCode::NOT_FOUND);
     }
+    tx.commit().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(json!({"token":token})))
 }
 impl AppState {
@@ -307,7 +334,7 @@ impl AppState {
             )
             .optional()?
             .ok_or_else(|| anyhow::anyhow!("Administrator not found"))?;
-        replace_password(self, id, password, None)
+        replace_password(self, id, password, None, None)
             .map_err(|_| anyhow::anyhow!("Recovery failed; verify password requirements and retry"))
     }
 }

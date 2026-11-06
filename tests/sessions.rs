@@ -467,3 +467,76 @@ async fn administrators_can_reset_credentials_and_cookie_mutations_require_csrf(
     );
     server.abort();
 }
+
+#[tokio::test]
+async fn older_instances_upgrade_pages_and_sessions_without_losing_credentials() {
+    for version in [1, 2] {
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::open(dir.path()).unwrap();
+        let token = state.initialize("admin", "a long password").unwrap();
+        drop(state);
+        // Recreate the previous release's schema as an upgrade fixture.
+        let db = rusqlite::Connection::open(dir.path().join("pagelet.sqlite3")).unwrap();
+        db.execute_batch("DROP TABLE sessions;").unwrap();
+        if version == 1 {
+            db.execute_batch("DROP TABLE pages;").unwrap();
+        }
+        db.pragma_update(None, "user_version", version).unwrap();
+        drop(db);
+        let state = AppState::open(dir.path()).unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/_/api/v1", listener.local_addr().unwrap());
+        let server =
+            tokio::spawn(async move { axum::serve(listener, router(state)).await.unwrap() });
+        let c = reqwest::Client::new();
+        assert_eq!(
+            c.post(format!("{url}/pages"))
+                .bearer_auth(token)
+                .json(&json!({"slug":"upgraded","markdown":"kept"}))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            201
+        );
+        let r = c
+            .post(format!("{url}/login"))
+            .header("x-pagelet-csrf", "1")
+            .json(&json!({"username":"admin","password":"a long password"}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), 200);
+        let cookie = r.headers()["set-cookie"]
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_string();
+        let reopened = AppState::open(dir.path()).unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let after = format!("http://{}/_/api/v1", listener.local_addr().unwrap());
+        let restarted =
+            tokio::spawn(async move { axum::serve(listener, router(reopened)).await.unwrap() });
+        assert_eq!(
+            c.get(format!("{after}/me"))
+                .header("cookie", cookie)
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            200
+        );
+        assert_eq!(
+            c.get(format!("{after}/pages/by-slug/upgraded"))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            200
+        );
+        server.abort();
+        restarted.abort();
+    }
+}
