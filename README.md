@@ -43,6 +43,32 @@ credentials or roles return 400. Passwords preserve Unicode and spaces.
 username and ID. Missing credentials return 401; ordinary users receive 403.
 The public `/_/openapi.json` describes both operations and their schemas.
 
+Browser login uses `POST /_/api/v1/login` with JSON `username` and `password`.
+Send `X-Pagelet-CSRF: 1` on login and every cookie-authenticated mutation.
+The API deliberately provides no cross-origin CORS permission: this custom header
+requires a same-origin browser request. The `pagelet_session` cookie is HttpOnly,
+host-only, SameSite=Lax, Path=/, and expires after exactly seven days without renewal.
+`POST /_/api/v1/logout` revokes only the current browser session. An explicitly
+supplied invalid bearer token never falls back to a browser cookie.
+
+`POST /_/api/v1/me/password` accepts `current_password` and a new `password`.
+Administrators reset an account password at `POST /_/api/v1/users/{id}/password`
+with `password`. Both return the replacement API `token` once and revoke all of
+that account's browser sessions. `POST /_/api/v1/me/token` or
+`POST /_/api/v1/users/{id}/token` (self or administrator) rotates only the API token,
+preserving browser sessions. API tokens otherwise do not expire.
+
+For local administrator recovery, run `pagelet --data-dir ./data recover-admin`.
+It asks for the administrator username, a hidden new password, and confirmation,
+then displays the replacement API token once. Ordinary accounts cannot use this
+recovery command. Recovery also invalidates every session and old API token.
+
+Login allows 10 attempts per 60-second window independently per direct peer IP
+and target account, including successful attempts. Further attempts receive 429;
+the window expires without permanent account lockout. Counters are process-local
+and reset on service restart. Direct clients cannot override their IP using
+forwarding headers.
+
 Authenticated users publish immediately with `POST /_/api/v1/pages`, sending
 `{"markdown":"# Hello","slug":"hello"}`. Omit `slug` for a generated address;
 empty Markdown is allowed. Custom slugs use 1–64 lowercase ASCII letters, digits,

@@ -18,6 +18,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     Init,
+    RecoverAdmin,
     Serve {
         #[arg(long, env = "PAGELET_LISTEN", default_value = "127.0.0.1:8080")]
         listen: String,
@@ -59,6 +60,17 @@ async fn main() -> Result<()> {
                 bail!("Passwords do not match");
             }
             let token = state.initialize(&username, &password)?;
+            println!("API token: {token}");
+            println!("Save this token now; it cannot be retrieved later.");
+        }
+        Command::RecoverAdmin => {
+            let username = read_input("Administrator username: ", false)?;
+            let password = read_input("New password: ", true)?;
+            let confirmation = read_input("Confirm password: ", true)?;
+            if password != confirmation {
+                bail!("Passwords do not match");
+            }
+            let token = state.recover_administrator(&username, &password)?;
             println!("API token: {token}");
             println!("Save this token now; it cannot be retrieved later.");
         }

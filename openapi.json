@@ -10,7 +10,14 @@
         "operationId": "getCurrentAccount",
         "security": [
           {
-            "bearerAuth": []
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
           }
         ],
         "responses": {
@@ -30,7 +37,10 @@
           "500": {
             "description": "Internal persistence error"
           }
-        }
+        },
+        "parameters": [
+
+        ]
       }
     },
     "/_/openapi.json": {
@@ -56,7 +66,14 @@
         "description": "Administrator-only provisioning. Username and role are immutable; no public registration. Issues exactly one full-permission token, disclosed only in this response.",
         "security": [
           {
-            "bearerAuth": []
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
           }
         ],
         "requestBody": {
@@ -89,20 +106,38 @@
           "403": {
             "description": "Administrator permission required"
           },
-          "409": {
-            "description": "Username already exists"
-          },
           "500": {
             "description": "Internal persistence error"
+          },
+          "409": {
+            "description": "Username already exists"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "X-Pagelet-CSRF",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "const": "1"
+            },
+            "description": "Required for login and all cookie-authenticated mutations; bearer requests do not require this header. No cross-origin CORS permission is granted."
+          }
+        ]
       },
       "get": {
         "operationId": "listUsers",
         "description": "Administrator-only literal case-sensitive username substring search, ordered by username then ID. No credentials returned.",
         "security": [
           {
-            "bearerAuth": []
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
           }
         ],
         "parameters": [
@@ -159,13 +194,433 @@
         }
       }
     },
+    "/_/api/v1/login": {
+      "post": {
+        "operationId": "login",
+        "security": [
+
+        ],
+        "parameters": [
+          {
+            "name": "X-Pagelet-CSRF",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "const": "1"
+            },
+            "description": "Required for login and all cookie-authenticated mutations; bearer requests do not require this header. No cross-origin CORS permission is granted."
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Missing or invalid credentials"
+          },
+          "403": {
+            "description": "Permission or CSRF header required"
+          },
+          "404": {
+            "description": "Target user not found"
+          },
+          "409": {
+            "description": "Credentials changed concurrently; retry"
+          },
+          "422": {
+            "description": "Malformed JSON body"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          },
+          "200": {
+            "description": "Credential operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResult"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "pagelet_session opaque credential; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800. Fixed absolute server expiry without renewal."
+              }
+            }
+          },
+          "429": {
+            "description": "10 attempts per 60 seconds per direct source IP and target account; process-local counters reset on restart."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Login"
+              }
+            }
+          }
+        },
+        "description": "Login requires X-Pagelet-CSRF: 1 even without an existing session. Logout revokes only the current browser session."
+      }
+    },
+    "/_/api/v1/logout": {
+      "post": {
+        "operationId": "logout",
+        "security": [
+          {
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Pagelet-CSRF",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "const": "1"
+            },
+            "description": "Required for login and all cookie-authenticated mutations; bearer requests do not require this header. No cross-origin CORS permission is granted."
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Missing or invalid credentials"
+          },
+          "403": {
+            "description": "Permission or CSRF header required"
+          },
+          "404": {
+            "description": "Target user not found"
+          },
+          "409": {
+            "description": "Credentials changed concurrently; retry"
+          },
+          "422": {
+            "description": "Malformed JSON body"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          },
+          "204": {
+            "description": "Current browser session revoked"
+          }
+        },
+        "description": "Login requires X-Pagelet-CSRF: 1 even without an existing session. Logout revokes only the current browser session."
+      }
+    },
+    "/_/api/v1/me/password": {
+      "post": {
+        "operationId": "changePassword",
+        "security": [
+          {
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Pagelet-CSRF",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "const": "1"
+            },
+            "description": "Required for login and all cookie-authenticated mutations; bearer requests do not require this header. No cross-origin CORS permission is granted."
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Missing or invalid credentials"
+          },
+          "403": {
+            "description": "Permission or CSRF header required"
+          },
+          "404": {
+            "description": "Target user not found"
+          },
+          "409": {
+            "description": "Credentials changed concurrently; retry"
+          },
+          "422": {
+            "description": "Malformed JSON body"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          },
+          "200": {
+            "description": "Credential operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuedToken"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChange"
+              }
+            }
+          }
+        },
+        "description": "Self change requires current_password. Administrator target reset requires administrator permission. Password changes rotate API token and revoke every account session atomically."
+      }
+    },
+    "/_/api/v1/me/token": {
+      "post": {
+        "operationId": "resetOwnToken",
+        "security": [
+          {
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Pagelet-CSRF",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "const": "1"
+            },
+            "description": "Required for login and all cookie-authenticated mutations; bearer requests do not require this header. No cross-origin CORS permission is granted."
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Missing or invalid credentials"
+          },
+          "403": {
+            "description": "Permission or CSRF header required"
+          },
+          "404": {
+            "description": "Target user not found"
+          },
+          "409": {
+            "description": "Credentials changed concurrently; retry"
+          },
+          "422": {
+            "description": "Malformed JSON body"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          },
+          "200": {
+            "description": "Credential operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuedToken"
+                }
+              }
+            }
+          }
+        },
+        "description": "Self or administrator target reset; immediately revokes the previous API token, preserves browser sessions. Token has no automatic expiry."
+      }
+    },
+    "/_/api/v1/users/{id}/password": {
+      "post": {
+        "operationId": "resetUserPassword",
+        "security": [
+          {
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Pagelet-CSRF",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "const": "1"
+            },
+            "description": "Required for login and all cookie-authenticated mutations; bearer requests do not require this header. No cross-origin CORS permission is granted."
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Missing or invalid credentials"
+          },
+          "403": {
+            "description": "Permission or CSRF header required"
+          },
+          "404": {
+            "description": "Target user not found"
+          },
+          "409": {
+            "description": "Credentials changed concurrently; retry"
+          },
+          "422": {
+            "description": "Malformed JSON body"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          },
+          "200": {
+            "description": "Credential operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuedToken"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordReset"
+              }
+            }
+          }
+        },
+        "description": "Self change requires current_password. Administrator target reset requires administrator permission. Password changes rotate API token and revoke every account session atomically."
+      }
+    },
+    "/_/api/v1/users/{id}/token": {
+      "post": {
+        "operationId": "resetUserToken",
+        "security": [
+          {
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Pagelet-CSRF",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "const": "1"
+            },
+            "description": "Required for login and all cookie-authenticated mutations; bearer requests do not require this header. No cross-origin CORS permission is granted."
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Missing or invalid credentials"
+          },
+          "403": {
+            "description": "Permission or CSRF header required"
+          },
+          "404": {
+            "description": "Target user not found"
+          },
+          "409": {
+            "description": "Credentials changed concurrently; retry"
+          },
+          "422": {
+            "description": "Malformed JSON body"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          },
+          "200": {
+            "description": "Credential operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuedToken"
+                }
+              }
+            }
+          }
+        },
+        "description": "Self or administrator target reset; immediately revokes the previous API token, preserves browser sessions. Token has no automatic expiry."
+      }
+    },
     "/_/api/v1/pages": {
       "post": {
         "operationId": "publishPage",
         "description": "Publish immediately as the authenticated owner. Request body bounded at 8 MiB for JSON escaping overhead. Content responses use Cache-Control: no-store.",
         "security": [
           {
-            "bearerAuth": []
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
           }
         ],
         "requestBody": {
@@ -203,15 +658,36 @@
           },
           "500": {
             "description": "Internal persistence error"
+          },
+          "403": {
+            "description": "Permission or CSRF header required"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "X-Pagelet-CSRF",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "const": "1"
+            },
+            "description": "Required for cookie-authenticated mutations."
+          }
+        ]
       },
       "get": {
         "operationId": "listPages",
         "description": "Metadata only. Ordinary users see only their pages; administrators see all and may filter owner_id. Literal slug substring search. Ordered by updated_at descending, then id descending.",
         "security": [
           {
-            "bearerAuth": []
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
           }
         ],
         "parameters": [
@@ -349,6 +825,12 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer"
+      },
+      "sessionAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "pagelet_session",
+        "description": "HttpOnly, SameSite=Lax, fixed seven-day expiry; API tokens are separate."
       }
     },
     "schemas": {
@@ -444,6 +926,87 @@
             "type": "integer"
           },
           "per_page": {
+            "type": "integer"
+          }
+        }
+      },
+      "Login": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "username",
+          "password"
+        ],
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "writeOnly": true
+          }
+        }
+      },
+      "PasswordChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "password",
+          "current_password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 128,
+            "description": "Unicode characters, preserving spaces without trimming or normalization. Stored as an irreversible verifier.",
+            "writeOnly": true
+          },
+          "current_password": {
+            "type": "string",
+            "writeOnly": true
+          }
+        }
+      },
+      "PasswordReset": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 128,
+            "description": "Unicode characters, preserving spaces without trimming or normalization. Stored as an irreversible verifier.",
+            "writeOnly": true
+          },
+          "current_password": {
+            "type": "string",
+            "writeOnly": true
+          }
+        }
+      },
+      "IssuedToken": {
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Replacement API token. Save now; never retrievable again."
+          }
+        }
+      },
+      "LoginResult": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
             "type": "integer"
           }
         }

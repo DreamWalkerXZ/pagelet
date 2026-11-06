@@ -44,7 +44,7 @@ async fn administrators_provision_accounts_with_one_time_tokens() {
     );
     assert_eq!(
         contract["paths"]["/_/api/v1/users"]["get"]["security"],
-        json!([{"bearerAuth":[]}])
+        json!([{"bearerAuth":[]},{"sessionAuth":[]}])
     );
     let alice = created["token"].as_str().unwrap();
     let me: Value = client
