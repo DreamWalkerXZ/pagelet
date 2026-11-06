@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Pagelet · Administration</title>
+    <link rel="stylesheet" href="/_/assets/reader.css" />
+    <link rel="stylesheet" href="/_/assets/app.css" />
+    <script type="module" src="/_/assets/admin.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <header>
+      <span class="brand">Pagelet<span class="dot">.</span></span>
+      <nav aria-label="Management">
+        <a href="/_/app/pages">My pages</a> <a href="/_/app/new">New page</a>
+        <a href="/_/app/account">Account</a>
+        <a href="/_/app/admin/pages">All pages</a>
+        <a href="/_/app/admin/users">Users</a>
+      </nav>
+    </header>
+    <main id="content">
+      <p id="status" role="status">Loading…</p>
+      <p id="error" role="alert"></p>
+      <section id="admin" hidden>
+        <h1 id="title"></h1>
+        <section id="token-panel" hidden>
+          <h2>Save the new API token now</h2>
+          <p>
+            This token is shown only once. Store it securely. Tokens cannot be
+            retrieved later.
+          </p>
+          <label for="token">New API token</label
+          ><input id="token" readonly autocomplete="off" /><button
+            id="dismiss"
+            type="button"
+          >
+            Dismiss token
+          </button>
+        </section>
+        <form id="search-form">
+          <label for="search">Search</label
+          ><input id="search" type="search" /><span id="owner-filter"
+            ><label for="owner">Owner ID</label
+            ><input id="owner" type="number" min="1" /></span
+          ><button>Search</button>
+        </form>
+        <p id="count"></p>
+        <div class="table-scroll">
+          <table>
+            <thead id="columns"></thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+        <div class="actions">
+          <button id="previous" type="button">Previous</button
+          ><span id="page-number"></span
+          ><button id="next" type="button">Next</button>
+        </div>
+        <section id="create" hidden>
+          <h2>Create user</h2>
+          <p>
+            Username and role are fixed at creation. Passwords require 12–128
+            characters.
+          </p>
+          <form id="create-form">
+            <label for="new-username">New username</label
+            ><input
+              id="new-username"
+              required
+              minlength="3"
+              maxlength="32"
+              autocomplete="off"
+            /><label for="initial-password">Initial password</label
+            ><input
+              id="initial-password"
+              type="password"
+              required
+              minlength="12"
+              maxlength="128"
+              autocomplete="new-password"
+            /><label for="role">Role</label
+            ><select id="role">
+              <option value="user">Ordinary user</option>
+              <option value="administrator">Administrator</option></select
+            ><button>Create user</button>
+          </form>
+        </section>
+      </section>
+      <noscript>This application requires JavaScript.</noscript>
+    </main>
+  </body>
+</html>
