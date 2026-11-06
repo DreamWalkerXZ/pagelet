@@ -106,6 +106,7 @@ struct Login {
 async fn login(
     State(state): State<AppState>,
     peer: Result<ConnectInfo<SocketAddr>, axum::extract::rejection::ExtensionRejection>,
+    headers: HeaderMap,
     Json(body): Json<Login>,
 ) -> Result<(HeaderMap, Json<Value>), StatusCode> {
     let now = (state.clock)();
@@ -115,9 +116,9 @@ async fn login(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .check(
             "login",
-            &peer
-                .map(|p| p.0.ip().to_string())
-                .unwrap_or_else(|_| "unknown".into()),
+            &state
+                .deployment
+                .source(peer.ok().map(|p| p.0.ip()), &headers)?,
             &body.username,
             now,
         )?;
@@ -153,9 +154,12 @@ async fn login(
     let mut headers = HeaderMap::new();
     headers.insert(
         "set-cookie",
-        format!("pagelet_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={WEEK}")
-            .parse()
-            .unwrap(),
+        format!(
+            "pagelet_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={WEEK}{}",
+            state.deployment.cookie_suffix()
+        )
+        .parse()
+        .unwrap(),
     );
     headers.insert("cache-control", "no-store".parse().unwrap());
     Ok((headers, Json(json!({"id":id}))))
@@ -179,9 +183,12 @@ async fn logout(
     let mut h = HeaderMap::new();
     h.insert(
         "set-cookie",
-        "pagelet_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"
-            .parse()
-            .unwrap(),
+        format!(
+            "pagelet_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0{}",
+            state.deployment.cookie_suffix()
+        )
+        .parse()
+        .unwrap(),
     );
     Ok((h, StatusCode::NO_CONTENT))
 }

@@ -187,6 +187,7 @@ pub(crate) async fn verify_password(
         axum::extract::ConnectInfo<std::net::SocketAddr>,
         axum::extract::rejection::ExtensionRejection,
     >,
+    headers: HeaderMap,
     body: Result<Json<VerifyPassword>, axum::extract::rejection::JsonRejection>,
 ) -> Result<Response, StatusCode> {
     use argon2::{Argon2, PasswordHash, PasswordVerifier};
@@ -218,9 +219,9 @@ pub(crate) async fn verify_password(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .check(
             "page-password",
-            &peer
-                .map(|p| p.0.ip().to_string())
-                .unwrap_or_else(|_| "unknown".into()),
+            &state
+                .deployment
+                .source(peer.ok().map(|p| p.0.ip()), &headers)?,
             &id.to_string(),
             now,
         )?;
@@ -249,7 +250,8 @@ pub(crate) async fn verify_password(
             (
                 header::SET_COOKIE,
                 format!(
-                    "pagelet_grant_{id}={grant}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400"
+                    "pagelet_grant_{id}={grant}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400{}",
+                    state.deployment.cookie_suffix()
                 ),
             ),
             (header::CACHE_CONTROL, "no-store".into()),
