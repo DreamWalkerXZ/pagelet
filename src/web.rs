@@ -25,6 +25,12 @@ async fn app(Path(path): Path<String>) -> Response {
             include_bytes!("../web/account.html"),
         );
     }
+    if matches!(path.as_str(), "admin/pages" | "admin/users") {
+        return content(
+            "text/html; charset=utf-8",
+            include_bytes!("../web/admin.html"),
+        );
+    }
     let editor = path
         .strip_prefix("pages/")
         .and_then(|p| p.strip_suffix("/edit"))
@@ -59,6 +65,10 @@ async fn asset(Path(path): Path<String>) -> Response {
         "account.js" => (
             "text/javascript; charset=utf-8",
             include_bytes!("../web/account.js"),
+        ),
+        "admin.js" => (
+            "text/javascript; charset=utf-8",
+            include_bytes!("../web/admin.js"),
         ),
         "app.js" => (
             "text/javascript; charset=utf-8",

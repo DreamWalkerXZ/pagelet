@@ -101,6 +101,34 @@ small {
     min-height: 300px;
   }
 }
+.table-scroll {
+  overflow-x: auto;
+}
+#admin table {
+  width: 100%;
+  text-align: left;
+}
+#admin th,
+#admin td {
+  padding: 12px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+#admin td:last-child {
+  min-width: 280px;
+}
+#admin td button {
+  margin: 4px 8px 4px 0;
+}
+#search-form,
+#create-form {
+  max-width: 480px;
+}
+#token-panel {
+  padding: 20px;
+  margin-bottom: 24px;
+  border: 1px solid var(--accent);
+}
 
 #view > section,
 #secret {
