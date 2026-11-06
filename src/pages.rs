@@ -18,6 +18,8 @@ pub(crate) struct Page {
     created_at: i64,
     updated_at: i64,
     version: i64,
+    #[serde(skip)]
+    access_password_hash: Option<String>,
 }
 
 fn row_page(row: &rusqlite::Row<'_>) -> rusqlite::Result<Page> {
@@ -29,6 +31,7 @@ fn row_page(row: &rusqlite::Row<'_>) -> rusqlite::Result<Page> {
         created_at: row.get(4)?,
         updated_at: row.get(5)?,
         version: row.get(6)?,
+        access_password_hash: row.get(7)?,
     })
 }
 
@@ -37,6 +40,7 @@ fn row_page(row: &rusqlite::Row<'_>) -> rusqlite::Result<Page> {
 pub(crate) struct CreatePage {
     markdown: String,
     slug: Option<String>,
+    access_password: Option<String>,
 }
 
 pub(crate) async fn create(
@@ -44,7 +48,7 @@ pub(crate) async fn create(
     headers: HeaderMap,
     body: Result<Json<CreatePage>, axum::extract::rejection::JsonRejection>,
 ) -> Result<Response, StatusCode> {
-    let account = authenticated_user(&state, &headers)?;
+    authenticated_user(&state, &headers)?;
     let Json(body) = body.map_err(|error| {
         if error.status() == StatusCode::PAYLOAD_TOO_LARGE {
             StatusCode::PAYLOAD_TOO_LARGE
@@ -58,10 +62,15 @@ pub(crate) async fn create(
     if body.slug.as_ref().is_some_and(|slug| !valid_slug(slug)) {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let db = state
+    let password_hash = password_hash(body.access_password.as_deref())?;
+    let mut db = state
         .db
         .lock()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let tx = db
+        .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let account = crate::authenticated_user_in(&tx, &headers, (state.clock)())?;
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -71,9 +80,10 @@ pub(crate) async fn create(
             .slug
             .clone()
             .unwrap_or_else(|| (state.slug_generator)());
-        match db.execute("INSERT INTO pages (slug, markdown, owner_id, created_at, updated_at, version) VALUES (?1, ?2, ?3, ?4, ?4, 1)", params![slug, body.markdown, account.id, timestamp]) {
+        match tx.execute("INSERT INTO pages (slug, markdown, owner_id, created_at, updated_at, version, access_password_hash) VALUES (?1, ?2, ?3, ?4, ?4, 1, ?5)", params![slug, body.markdown, account.id, timestamp, password_hash]) {
             Ok(_) => {
-                let page = Page { id: db.last_insert_rowid(), slug, markdown: body.markdown, owner_id: account.id, created_at: timestamp, updated_at: timestamp, version: 1 };
+                let page = Page { id: tx.last_insert_rowid(), slug, markdown: body.markdown, owner_id: account.id, created_at: timestamp, updated_at: timestamp, version: 1, access_password_hash: password_hash };
+                tx.commit().map_err(|_|StatusCode::INTERNAL_SERVER_ERROR)?;
                 return Ok((StatusCode::CREATED, [(header::CACHE_CONTROL, "no-store")], Json(page)).into_response());
             }
             Err(rusqlite::Error::SqliteFailure(error, _)) if error.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE => {
@@ -84,36 +94,167 @@ pub(crate) async fn create(
     }
 }
 
-fn find(state: &AppState, slug: &str) -> Result<Page, StatusCode> {
+fn find(state: &AppState, slug: &str, headers: &HeaderMap) -> Result<Page, StatusCode> {
     let db = state
         .db
         .lock()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    db.query_row("SELECT id, slug, markdown, owner_id, created_at, updated_at, version FROM pages WHERE slug = ?1", [slug], row_page).optional().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)
+    let page = db.query_row("SELECT id, slug, markdown, owner_id, created_at, updated_at, version, access_password_hash FROM pages WHERE slug = ?1", [slug], row_page).optional().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    if page.access_password_hash.is_none() {
+        return Ok(page);
+    }
+    if crate::authenticated_user_in(&db, headers, (state.clock)())
+        .is_ok_and(|a| a.id == page.owner_id || a.role == "administrator")
+    {
+        return Ok(page);
+    }
+    let name = format!("pagelet_grant_{}=", page.id);
+    let token = headers
+        .get("x-pagelet-grant")
+        .and_then(|h| h.to_str().ok())
+        .or_else(|| {
+            headers
+                .get("cookie")
+                .and_then(|h| h.to_str().ok())
+                .and_then(|c| c.split(';').find_map(|v| v.trim().strip_prefix(&name)))
+        });
+    if let Some(token) = token {
+        let valid = db.query_row("SELECT EXISTS(SELECT 1 FROM page_grants WHERE token_hash=?1 AND page_id=?2 AND expires_at>?3)",params![crate::token_hash(token),page.id,(state.clock)()],|r|r.get::<_,bool>(0)).map_err(|_|StatusCode::INTERNAL_SERVER_ERROR)?;
+        if valid {
+            return Ok(page);
+        }
+    }
+    Err(StatusCode::UNAUTHORIZED)
 }
-
+fn read_error(status: StatusCode) -> Response {
+    if status == StatusCode::UNAUTHORIZED {
+        (
+            status,
+            Json(serde_json::json!({"error":"password_required"})),
+        )
+            .into_response()
+    } else {
+        status.into_response()
+    }
+}
 pub(crate) async fn read(
     State(state): State<AppState>,
     Path(slug): Path<String>,
-) -> Result<Response, StatusCode> {
-    Ok((
-        [(header::CACHE_CONTROL, "no-store")],
-        Json(find(&state, &slug)?),
-    )
-        .into_response())
+    headers: HeaderMap,
+) -> Response {
+    match find(&state, &slug, &headers) {
+        Ok(page) => ([(header::CACHE_CONTROL, "no-store")], Json(page)).into_response(),
+        Err(status) => read_error(status),
+    }
 }
-
 pub(crate) async fn raw(
     State(state): State<AppState>,
     Path(slug): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    match find(&state, &slug, &headers) {
+        Ok(page) => (
+            [
+                (header::CACHE_CONTROL, "no-store"),
+                (header::CONTENT_TYPE, "text/plain; charset=utf-8"),
+                (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+            ],
+            page.markdown,
+        )
+            .into_response(),
+        Err(status) => read_error(status),
+    }
+}
+
+fn password_hash(password: Option<&str>) -> Result<Option<String>, StatusCode> {
+    match password {
+        None | Some("") => Ok(None),
+        Some(p) if p.chars().count() <= 128 => crate::hash_password(p)
+            .map(Some)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR),
+        _ => Err(StatusCode::BAD_REQUEST),
+    }
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct VerifyPassword {
+    password: String,
+}
+pub(crate) async fn verify_password(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    peer: Result<
+        axum::extract::ConnectInfo<std::net::SocketAddr>,
+        axum::extract::rejection::ExtensionRejection,
+    >,
+    body: Result<Json<VerifyPassword>, axum::extract::rejection::JsonRejection>,
 ) -> Result<Response, StatusCode> {
+    use argon2::{Argon2, PasswordHash, PasswordVerifier};
+    let Json(body) = body.map_err(|_| StatusCode::BAD_REQUEST)?;
+    let (id, hash, version) = {
+        let db = state
+            .db
+            .lock()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        db.query_row(
+            "SELECT id,access_password_hash,version FROM pages WHERE slug=?1",
+            [slug],
+            |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, Option<String>>(1)?,
+                    r.get::<_, i64>(2)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?
+    };
+    let now = (state.clock)();
+    state
+        .limits
+        .lock()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .check(
+            "page-password",
+            &peer
+                .map(|p| p.0.ip().to_string())
+                .unwrap_or_else(|_| "unknown".into()),
+            &id.to_string(),
+            now,
+        )?;
+    let hash = hash.ok_or(StatusCode::BAD_REQUEST)?;
+    if body.password.chars().count() > 128
+        || !PasswordHash::new(&hash).is_ok_and(|h| {
+            Argon2::default()
+                .verify_password(body.password.as_bytes(), &h)
+                .is_ok()
+        })
+    {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    let grant = crate::new_token();
+    let db = state
+        .db
+        .lock()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Recheck the verifier atomically so a concurrent policy change cannot issue a stale grant.
+    let changed = db.execute("INSERT INTO page_grants(token_hash,page_id,expires_at) SELECT ?1,id,?2 FROM pages WHERE id=?3 AND access_password_hash=?4 AND version=?5",params![crate::token_hash(&grant),now+86400,id,hash,version]).map_err(|_|StatusCode::INTERNAL_SERVER_ERROR)?;
+    if changed == 0 {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
     Ok((
         [
-            (header::CACHE_CONTROL, "no-store"),
-            (header::CONTENT_TYPE, "text/plain; charset=utf-8"),
-            (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+            (
+                header::SET_COOKIE,
+                format!(
+                    "pagelet_grant_{id}={grant}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400"
+                ),
+            ),
+            (header::CACHE_CONTROL, "no-store".into()),
         ],
-        find(&state, &slug)?.markdown,
+        Json(serde_json::json!({"grant":grant,"expires_at":now+86400})),
     )
         .into_response())
 }
@@ -157,7 +298,7 @@ pub(crate) async fn list(
     let search = query.search.unwrap_or_default();
     let result = (|| -> rusqlite::Result<serde_json::Value> {
         let total: i64 = db.query_row("SELECT COUNT(*) FROM pages WHERE (?1 IS NULL OR owner_id = ?1) AND instr(slug, ?2) > 0", params![owner, search], |r| r.get(0))?;
-        let mut statement = db.prepare("SELECT id, slug, markdown, owner_id, created_at, updated_at, version FROM pages WHERE (?1 IS NULL OR owner_id = ?1) AND instr(slug, ?2) > 0 ORDER BY updated_at DESC, id DESC LIMIT ?3 OFFSET ?4")?;
+        let mut statement = db.prepare("SELECT id, slug, markdown, owner_id, created_at, updated_at, version, access_password_hash FROM pages WHERE (?1 IS NULL OR owner_id = ?1) AND instr(slug, ?2) > 0 ORDER BY updated_at DESC, id DESC LIMIT ?3 OFFSET ?4")?;
         let pages = statement.query_map(params![owner, search, per_page, offset], |row| {
             Ok(serde_json::json!({"id":row.get::<_,i64>(0)?,"slug":row.get::<_,String>(1)?,"owner_id":row.get::<_,i64>(3)?,"created_at":row.get::<_,i64>(4)?,"updated_at":row.get::<_,i64>(5)?,"version":row.get::<_,i64>(6)?}))
         })?.collect::<rusqlite::Result<Vec<_>>>()?;
@@ -182,6 +323,7 @@ pub(crate) struct EditPage {
     version: i64,
     markdown: Option<String>,
     slug: Option<String>,
+    access_password: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -195,7 +337,7 @@ fn management_page(
     id: i64,
     account: &crate::Account,
 ) -> Result<Page, StatusCode> {
-    let page = db.query_row("SELECT id, slug, markdown, owner_id, created_at, updated_at, version FROM pages WHERE id = ?1", [id], row_page).optional().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
+    let page = db.query_row("SELECT id, slug, markdown, owner_id, created_at, updated_at, version, access_password_hash FROM pages WHERE id = ?1", [id], row_page).optional().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     if page.owner_id != account.id && account.role != "administrator" {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -242,6 +384,7 @@ pub(crate) async fn edit(
     if body.slug.as_ref().is_some_and(|slug| !valid_slug(slug)) || body.version < 1 {
         return Err(StatusCode::BAD_REQUEST);
     }
+    let new_hash = password_hash(body.access_password.as_deref())?;
     let mut db = state
         .db
         .lock()
@@ -254,7 +397,7 @@ pub(crate) async fn edit(
     if page.version != body.version {
         return Err(StatusCode::CONFLICT);
     }
-    if body.markdown.is_none() && body.slug.is_none() {
+    if body.markdown.is_none() && body.slug.is_none() && body.access_password.is_none() {
         return Err(StatusCode::BAD_REQUEST);
     }
     if let Some(markdown) = body.markdown {
@@ -263,6 +406,11 @@ pub(crate) async fn edit(
     if let Some(slug) = body.slug {
         page.slug = slug;
     }
+    if body.access_password.is_some() {
+        page.access_password_hash = new_hash;
+        tx.execute("DELETE FROM page_grants WHERE page_id=?1", [id])
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
     page.version += 1;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -270,8 +418,8 @@ pub(crate) async fn edit(
         .as_millis() as i64;
     page.updated_at = now.max(page.updated_at + 1);
     tx.execute(
-        "UPDATE pages SET markdown = ?1, slug = ?2, version = ?3, updated_at = ?4 WHERE id = ?5",
-        params![page.markdown, page.slug, page.version, page.updated_at, id],
+        "UPDATE pages SET markdown = ?1, slug = ?2, version = ?3, updated_at = ?4, access_password_hash = ?6 WHERE id = ?5",
+        params![page.markdown, page.slug, page.version, page.updated_at, id, page.access_password_hash],
     )
     .map_err(|error| match error {
         rusqlite::Error::SqliteFailure(error, _)

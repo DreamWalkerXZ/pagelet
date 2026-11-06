@@ -95,3 +95,9 @@ Changing a slug preserves page identity, ownership, content, and access policy.
 The previous slug immediately becomes reusable and has no redirect. Deletion
 permanently removes the page and releases its slug, with no recycle bin or restore
 API; this does not guarantee secure erasure from storage or backups.
+
+Page access passwords can be set during creation or changed with `PATCH /_/api/v1/pages/{id}` using `access_password` and the last-read `version`. Passwords contain 1–128 Unicode characters without trimming or normalization; `""` removes protection. Omit the field to preserve the current policy. Password verifiers are never returned. Owners and administrators bypass protection; other accounts have the same read access as visitors.
+
+Protected API and raw reads return HTTP 401 with only `{"error":"password_required"}` until authorized. Submit `{"password":"..."}` to `POST /_/api/v1/pages/by-slug/{slug}/verify-password`. Successful verification returns `{"grant":"...","expires_at":...}` (Unix seconds) and an HttpOnly `pagelet_grant_{page_id}` cookie with `Path=/`, `SameSite=Lax`, and `Max-Age=86400`. Scripts send the grant in `X-Pagelet-Grant`; URLs never carry credentials. Multiple pages use separate cookies. Grants authorize reading only and expire after a fixed 24 hours, including across service restarts. Password changes/removal, page deletion, and ownership transfer revoke grants. Grants follow immutable page identity, so reusing a slug cannot reuse its authorization. Reads and grant issuance use `Cache-Control: no-store`; policy changes cannot recall content already downloaded.
+
+Page-password verification reuses login abuse controls: at most ten attempts per direct source IP and per page in a 60-second window, with HTTP 429 on excess attempts. Counters are process-local and reset on restart. Forwarding headers from direct clients cannot bypass these limits.
