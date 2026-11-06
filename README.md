@@ -1,6 +1,6 @@
 # Pagelet
 
-A self-hosted Markdown publishing service. The initial API slice provides local initialization and bearer account inspection.
+A self-hosted Markdown publishing service. Phase one delivers the complete API, raw Markdown access, public OpenAPI contract, and local initialization/recovery CLI. Public reading pages, editor preview, and the browser management interface are phase two and are not included yet.
 
 ## Run
 
@@ -24,7 +24,20 @@ curl http://127.0.0.1:8080/_/openapi.json
 
 ## Persistence and upgrades
 
-The data directory contains `pagelet.sqlite3`. Forward migrations run automatically when the directory opens. Binaries reject newer schema versions; downgrades are unsupported. Before upgrading, stop the service and copy the entire data directory to a separate backup location. Restore a backup only while the service is stopped. Do not rely on copying only the executable.
+The data directory contains `pagelet.sqlite3`. Forward migrations run automatically when the directory opens. Binaries reject newer schema versions; downgrades are unsupported. Before upgrading, stop the service and copy the entire data directory to a separate backup location. Restore a backup only while the service is stopped. Do not rely on copying only the executable. The executable contains the service and SQLite engine, not your accounts, credentials, pages, or access grants. No runtime database service or source checkout is required.
+
+Use absolute paths for service deployment and restrict the data directory to the service account. For a local example, stop Pagelet (and disable automatic restart), then run:
+
+```sh
+# Run only after the service has stopped. Keep this backup before every upgrade.
+cp -a /srv/pagelet/data /srv/backups/pagelet-before-upgrade
+# Replace the executable, then restart with the same data directory.
+/srv/pagelet/pagelet --data-dir /srv/pagelet/data serve
+```
+
+Copy the **entire** directory, including any SQLite journal or sidecar files. Choose a new backup destination each time; keep backups private because they contain account verifiers and page content. An online file copy is not a supported backup method. Verify the copied backup by starting it separately on a loopback test port and checking authenticated API/raw reads, then stop that test instance.
+
+To restore, stop Pagelet again, move the current data directory aside, and copy the chosen backup back to the configured path. Preserve ownership and permissions, then start a compatible executable and verify account authentication and representative pages before reopening public traffic. Never overlay a backup onto an active or partially populated directory. A backup restores the whole instance as of that copy, including credentials and grants; later edits and credential rotations will be lost. Keep the previous binary with its pre-upgrade backup if rollback is needed: do not open an upgraded database with an older binary. Migrations run before serving requests, and a newer unsupported schema is refused without attempting a downgrade.
 
 ## Verify
 
@@ -149,3 +162,18 @@ cookie policy. Keep browser requests on the same external origin, preserve
 permissive CORS headers at the proxy. TLS termination does not replace CSRF
 protection. The external URL is deployment configuration, not built-in TLS or a
 redirect service.
+
+## API-phase acceptance
+
+`cargo test --test acceptance` runs the actual executable with a real temporary SQLite directory through initialization, user provisioning, publication/raw reading, password verification, token rotation, ownership transfer, and permanent account/page deletion. It stops the process, copies the entire current data directory, and runs the restored instance from the copy. Requests and observed responses are checked against the public OpenAPI operation's status, media type, and structural schemas (references, required fields, types, enums, and constants), including conflicts and rate limits. This is a focused contract regression check, not a general OpenAPI/JSON Schema conformance engine.
+
+The remaining HTTP/SQLite suites cover session/CSRF and authorization alternatives, validation boundaries, concurrency, proxy abuse controls, credential revocation, and forward migration fixtures for schema versions 1–3. CLI tests cover uninitialized startup refusal, recovery, repeat initialization refusal, and newer-schema rejection. Run the full suite for release acceptance:
+
+```sh
+cargo test
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo build --release
+```
+
+Visitors cannot enumerate users/pages or publish anonymously. There is no public registration, role editing, account suspension, backend HTML rendering, attachment storage, online backup, or database downgrade. Browser rendering and end-to-end browser checks belong to phase two.
