@@ -1,3 +1,5 @@
+mod deployment;
+pub use deployment::Deployment;
 mod pages;
 mod sessions;
 mod users;
@@ -24,6 +26,7 @@ use std::{
 
 #[derive(Clone)]
 pub struct AppState {
+    pub deployment: Deployment,
     pub db: Arc<Mutex<Connection>>,
     pub clock: Arc<dyn Fn() -> i64 + Send + Sync>,
     pub limits: Arc<Mutex<sessions::RateLimiter>>,
@@ -82,6 +85,7 @@ impl AppState {
         }
         transaction.commit()?;
         Ok(Self {
+            deployment: Deployment::default(),
             db: Arc::new(Mutex::new(db)),
             clock: Arc::new(|| {
                 std::time::SystemTime::now()
