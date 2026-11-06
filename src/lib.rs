@@ -1,3 +1,4 @@
+mod pages;
 mod users;
 
 use anyhow::{Context, Result, bail};
@@ -23,6 +24,7 @@ use std::{
 #[derive(Clone)]
 pub struct AppState {
     pub db: Arc<Mutex<Connection>>,
+    pub slug_generator: Arc<dyn Fn() -> String + Send + Sync>,
 }
 
 #[derive(Serialize)]
@@ -41,7 +43,7 @@ impl AppState {
         let transaction = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let version: i64 =
             transaction.pragma_query_value(None, "user_version", |row| row.get(0))?;
-        if version > 1 {
+        if version > 2 {
             bail!("Database schema is newer than this executable supports");
         }
         if version < 1 {
@@ -55,9 +57,24 @@ impl AppState {
             ); PRAGMA user_version = 1;",
             )?;
         }
+        if version < 2 {
+            transaction.execute_batch(
+                "CREATE TABLE pages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug TEXT NOT NULL UNIQUE,
+                markdown TEXT NOT NULL,
+                owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                version INTEGER NOT NULL DEFAULT 1,
+                access_password_hash TEXT
+            ); PRAGMA user_version = 2;",
+            )?;
+        }
         transaction.commit()?;
         Ok(Self {
             db: Arc::new(Mutex::new(db)),
+            slug_generator: Arc::new(pages::random_slug),
         })
     }
 
@@ -176,6 +193,14 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/_/api/v1/me", get(me))
         .route("/_/api/v1/users", get(users::list).post(users::create))
+        .route(
+            "/_/api/v1/pages",
+            get(pages::list)
+                .post(pages::create)
+                .layer(axum::extract::DefaultBodyLimit::max(8 * 1024 * 1024)),
+        )
+        .route("/_/api/v1/pages/by-slug/{slug}", get(pages::read))
+        .route("/_/raw/{slug}", get(pages::raw))
         .route("/_/openapi.json", get(|| async { Json(openapi()) }))
         .with_state(state)
 }
