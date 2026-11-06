@@ -187,13 +187,15 @@ async fn request(
         .to_owned();
     let text = response.text().await.unwrap();
     if text.is_empty() {
+        assert!(definition.get("content").is_none(), "missing response body");
         return Value::Null;
     }
     if content_type.starts_with("application/json") {
         let value = serde_json::from_str(&text).unwrap();
-        if let Some(definition) = definition.pointer("/content/application~1json/schema") {
-            schema(contract, definition, &value);
-        }
+        let definition = definition
+            .pointer("/content/application~1json/schema")
+            .expect("documented JSON response schema");
+        schema(contract, definition, &value);
         value
     } else {
         assert!(
