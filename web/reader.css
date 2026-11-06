@@ -1,0 +1,239 @@
+:root {
+  color-scheme: light dark;
+  --paper: #faf9f6;
+  --ink: #252820;
+  --muted: #74776e;
+  --line: #dedfd6;
+  --accent: #466443;
+  --code: #eeeee7;
+  font:
+    17px/1.75 system-ui,
+    sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+}
+* {
+  box-sizing: border-box;
+}
+[hidden] {
+  display: none !important;
+}
+body {
+  margin: 0;
+}
+header,
+main,
+footer {
+  max-width: 800px;
+  margin: auto;
+  padding: 0 32px;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 34px;
+  padding-bottom: 35px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.8rem;
+}
+.brand {
+  font-size: 1.1rem;
+  font-weight: 750;
+  letter-spacing: -0.04em;
+}
+.dot {
+  color: var(--accent);
+}
+a {
+  color: var(--accent);
+  text-underline-offset: 4px;
+}
+main {
+  min-height: 68vh;
+  padding-top: 48px;
+  padding-bottom: 60px;
+}
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+  padding-bottom: 30px;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+article {
+  overflow-wrap: anywhere;
+}
+article > :first-child {
+  margin-top: 0;
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  margin: 1.5em 0 0.65em;
+}
+h1 {
+  font-size: 2.35rem;
+  font-weight: 650;
+}
+h2 {
+  font-size: 1.65rem;
+}
+h3 {
+  font-size: 1.25rem;
+}
+p,
+ul,
+ol,
+blockquote,
+pre,
+table {
+  margin: 0 0 1.3em;
+}
+li > p {
+  margin: 0.4em 0;
+}
+img {
+  max-width: 100%;
+  height: auto;
+}
+blockquote {
+  border-left: 3px solid var(--line);
+  padding-left: 1.2em;
+  color: var(--muted);
+}
+pre {
+  overflow: auto;
+  padding: 20px;
+  background: var(--code);
+  border-radius: 5px;
+  line-height: 1.55;
+}
+code {
+  font-size: 0.85em;
+  background: var(--code);
+  padding: 0.15em 0.3em;
+  border-radius: 3px;
+}
+pre code {
+  padding: 0;
+}
+table {
+  display: block;
+  overflow: auto;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.9em;
+}
+td,
+th {
+  padding: 0.5em 1em;
+  border: 1px solid var(--line);
+}
+th {
+  background: var(--code);
+}
+hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 2em 0;
+}
+input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+#challenge {
+  max-width: 490px;
+  padding-top: 25px;
+}
+.eyebrow {
+  color: var(--muted);
+  font-size: 0.65rem;
+  letter-spacing: 0.15em;
+}
+#challenge h1 {
+  font-size: 2rem;
+}
+#challenge p {
+  color: var(--muted);
+}
+label {
+  display: block;
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+}
+input[type="password"] {
+  display: block;
+  width: 100%;
+  font: inherit;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 9px 12px;
+}
+button {
+  font: 600 0.85rem system-ui;
+  border: 0;
+  border-radius: 5px;
+  background: var(--accent);
+  color: white;
+  padding: 12px 20px;
+  margin-top: 14px;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+#password-error {
+  font-size: 0.8rem;
+  margin-top: 12px;
+}
+a:focus-visible,
+input:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.skip {
+  position: absolute;
+  left: 16px;
+  top: -80px;
+  background: var(--paper);
+  padding: 8px;
+}
+.skip:focus {
+  top: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1d211d;
+    --ink: #e4e6dc;
+    --muted: #a3ab9e;
+    --line: #3e473b;
+    --accent: #b2caa0;
+    --code: #2b3229;
+  }
+  button {
+    color: #1d211d;
+  }
+}
+@media (max-width: 600px) {
+  header,
+  main,
+  footer {
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+  main {
+    padding-top: 32px;
+  }
+  h1 {
+    font-size: 1.9rem;
+  }
+}
