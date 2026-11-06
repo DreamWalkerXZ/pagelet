@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Pagelet · Account</title>
+    <link rel="stylesheet" href="/_/assets/reader.css" />
+    <link rel="stylesheet" href="/_/assets/app.css" />
+    <script type="module" src="/_/assets/account.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <header>
+      <span class="brand">Pagelet<span class="dot">.</span></span>
+      <nav aria-label="Management">
+        <a href="/_/app/pages">My pages</a><a href="/_/app/new">New page</a
+        ><a href="/_/app/account">Account</a>
+      </nav>
+    </header>
+    <main id="content">
+      <p id="status" role="status">Loading…</p>
+      <p id="error" role="alert"></p>
+      <section id="view"></section>
+      <section id="secret" hidden aria-labelledby="secret-title">
+        <h2 id="secret-title">Save your new API token</h2>
+        <p>
+          This token is shown only now. Leaving or reloading this page hides it.
+          The previous token no longer works.
+        </p>
+        <label for="token">New API token</label
+        ><input id="token" readonly autocomplete="off" /><button
+          id="dismiss"
+          type="button"
+        >
+          Dismiss token
+        </button>
+      </section>
+      <a id="reauth" href="/_/app/login" hidden>Log in again</a
+      ><noscript>This application requires JavaScript.</noscript>
+    </main>
+    <footer>Publish something worth sharing.</footer>
+  </body>
+</html>

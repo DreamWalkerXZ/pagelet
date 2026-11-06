@@ -19,6 +19,12 @@ async fn app_root() -> Response {
     axum::response::Redirect::to("/_/app/new").into_response()
 }
 async fn app(Path(path): Path<String>) -> Response {
+    if matches!(path.as_str(), "pages" | "account") {
+        return content(
+            "text/html; charset=utf-8",
+            include_bytes!("../web/account.html"),
+        );
+    }
     if matches!(path.as_str(), "admin/pages" | "admin/users") {
         return content(
             "text/html; charset=utf-8",
@@ -56,6 +62,10 @@ fn content(kind: &'static str, body: &'static [u8]) -> Response {
 }
 async fn asset(Path(path): Path<String>) -> Response {
     let (kind, bytes): (&str, &'static [u8]) = match path.as_str() {
+        "account.js" => (
+            "text/javascript; charset=utf-8",
+            include_bytes!("../web/account.js"),
+        ),
         "admin.js" => (
             "text/javascript; charset=utf-8",
             include_bytes!("../web/admin.js"),
