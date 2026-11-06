@@ -82,3 +82,16 @@ HTML endpoint. `GET /_/api/v1/pages` requires account authentication and returns
 metadata only, with `search`, `page` (default 1), and `per_page` (default 20,
 capped at 100). Ordinary users see their pages; administrators see all and can
 filter by `owner_id`. Results use descending update time, then descending ID.
+
+Page management uses the immutable `id` from publication or management lists:
+`GET /_/api/v1/pages/{id}`, `PATCH /_/api/v1/pages/{id}` with
+`{"version":1,"markdown":"# Updated","slug":"new-address"}`, and
+`DELETE /_/api/v1/pages/{id}` with `{"version":2}`. Authenticate as the owner
+or an administrator. PATCH accepts either or both Markdown and slug; every successful
+change advances the version and update timestamp. Supply the last-read version;
+stale edits and deletions return 409 without modifying the page.
+
+Changing a slug preserves page identity, ownership, content, and access policy.
+The previous slug immediately becomes reusable and has no redirect. Deletion
+permanently removes the page and releases its slug, with no recycle bin or restore
+API; this does not guarantee secure erasure from storage or backups.

@@ -818,6 +818,190 @@
           }
         }
       }
+    },
+    "/_/api/v1/pages/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "readManagedPage",
+        "security": [
+          {
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
+          }
+        ],
+        "description": "Owner or administrator only. Stable page ID. Content responses use Cache-Control: no-store.",
+        "responses": {
+          "401": {
+            "description": "Missing or invalid authentication"
+          },
+          "403": {
+            "description": "Owner or administrator permission required"
+          },
+          "404": {
+            "description": "Page no longer exists or was not found, including a concurrent deletion"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          },
+          "200": {
+            "description": "Page source and metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "editPage",
+        "security": [
+          {
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
+          }
+        ],
+        "description": "Owner or administrator only. Stable page ID. Content responses use Cache-Control: no-store.",
+        "responses": {
+          "401": {
+            "description": "Missing or invalid authentication"
+          },
+          "403": {
+            "description": "Owner or administrator permission required"
+          },
+          "404": {
+            "description": "Page no longer exists or was not found, including a concurrent deletion"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          },
+          "200": {
+            "description": "Page source and metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON or parameters"
+          },
+          "409": {
+            "description": "Stale page version or occupied slug; no changes applied"
+          },
+          "413": {
+            "description": "Markdown exceeds 1 MiB or encoded body exceeds 8 MiB"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditPage"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Pagelet-CSRF",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "const": "1"
+            },
+            "description": "Required with value 1 for cookie-authenticated mutations."
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "deletePage",
+        "security": [
+          {
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
+          }
+        ],
+        "description": "Owner or administrator only. Stable page ID. Content responses use Cache-Control: no-store.",
+        "responses": {
+          "401": {
+            "description": "Missing or invalid authentication"
+          },
+          "403": {
+            "description": "Owner or administrator permission required"
+          },
+          "404": {
+            "description": "Page no longer exists or was not found, including a concurrent deletion"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          },
+          "204": {
+            "description": "Permanently deleted; slug immediately released. No recycle bin or secure-erasure guarantee."
+          },
+          "400": {
+            "description": "Invalid JSON or parameters"
+          },
+          "409": {
+            "description": "Stale page version or occupied slug; no changes applied"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletePage"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-Pagelet-CSRF",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "const": "1"
+            },
+            "description": "Required with value 1 for cookie-authenticated mutations."
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1128,6 +1312,43 @@
           },
           "per_page": {
             "type": "integer"
+          }
+        }
+      },
+      "EditPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "markdown": {
+            "type": "string",
+            "description": "Valid UTF-8, up to 1048576 bytes; empty content is published immediately."
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+          }
+        },
+        "description": "Provide at least one of markdown or slug. Every successful mutation advances the version."
+      },
+      "DeletePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1
           }
         }
       }

@@ -224,6 +224,13 @@ pub fn router(state: AppState) -> Router {
                 .post(pages::create)
                 .layer(axum::extract::DefaultBodyLimit::max(8 * 1024 * 1024)),
         )
+        .route(
+            "/_/api/v1/pages/{id}",
+            get(pages::management_read)
+                .patch(pages::edit)
+                .delete(pages::delete)
+                .layer(axum::extract::DefaultBodyLimit::max(8 * 1024 * 1024)),
+        )
         .route("/_/api/v1/pages/by-slug/{slug}", get(pages::read))
         .route("/_/raw/{slug}", get(pages::raw))
         .route("/_/openapi.json", get(|| async { Json(openapi()) }))

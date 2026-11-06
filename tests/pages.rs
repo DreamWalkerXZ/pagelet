@@ -301,3 +301,287 @@ async fn generated_slug_collisions_retry_without_replacing_content() {
     );
     server.abort();
 }
+
+#[tokio::test]
+async fn stable_id_edits_conflicts_and_permanent_deletion() {
+    let directory = tempfile::tempdir().unwrap();
+    let state = AppState::open(directory.path()).unwrap();
+    let token = state.initialize("admin", "a long password").unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/_/api/v1/pages", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, router(state)).await.unwrap() });
+    let client = reqwest::Client::new();
+    let original: Value = client
+        .post(&url)
+        .bearer_auth(&token)
+        .json(&json!({"slug":"old","markdown":"first"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let target = format!("{url}/{}", original["id"]);
+    let response = client
+        .patch(&target)
+        .bearer_auth(&token)
+        .json(&json!({"version":1,"slug":"new"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let changed: Value = response.json().await.unwrap();
+    assert_eq!(changed["id"], original["id"]);
+    assert_eq!(changed["markdown"], "first");
+    assert_eq!(changed["created_at"], original["created_at"]);
+    assert_eq!(changed["version"], 2);
+    assert!(changed["updated_at"].as_i64().unwrap() > original["updated_at"].as_i64().unwrap());
+    assert_eq!(
+        client
+            .get(format!("{url}/by-slug/old"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    assert_eq!(
+        client
+            .post(&url)
+            .bearer_auth(&token)
+            .json(&json!({"slug":"old","markdown":"reused"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        201
+    );
+    for method in [reqwest::Method::PATCH, reqwest::Method::DELETE] {
+        assert_eq!(
+            client
+                .request(method, &target)
+                .bearer_auth(&token)
+                .json(&json!({"version":1}))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            409
+        );
+    }
+    assert_eq!(
+        client
+            .delete(&target)
+            .bearer_auth(&token)
+            .json(&json!({"version":2}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        204
+    );
+    assert_eq!(
+        client
+            .get(&target)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    assert_eq!(
+        client
+            .post(&url)
+            .bearer_auth(&token)
+            .json(&json!({"slug":"new","markdown":"replacement"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        201
+    );
+    assert_eq!(
+        client
+            .get(&target)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    server.abort();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn page_management_authorization_validation_and_competing_mutations() {
+    let directory = tempfile::tempdir().unwrap();
+    let state = AppState::open(directory.path()).unwrap();
+    let admin = state.initialize("admin", "a long password").unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/_/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, router(state)).await.unwrap() });
+    let client = reqwest::Client::new();
+    let mut tokens = Vec::new();
+    for username in ["alice", "bobby"] {
+        let user: Value = client
+            .post(format!("{url}/users"))
+            .bearer_auth(&admin)
+            .json(&json!({"username":username,"password":"a long password","role":"user"}))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        tokens.push(user["token"].as_str().unwrap().to_owned());
+    }
+    let page: Value = client
+        .post(format!("{url}/pages"))
+        .bearer_auth(&tokens[0])
+        .json(&json!({"slug":"mine","markdown":"original"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let target = format!("{url}/pages/{}", page["id"]);
+    for method in [
+        reqwest::Method::GET,
+        reqwest::Method::PATCH,
+        reqwest::Method::DELETE,
+    ] {
+        for (token, expected) in [(None, 401), (Some(&tokens[1]), 403)] {
+            let mut request = client
+                .request(method.clone(), &target)
+                .json(&json!({"version":1,"slug":"stolen"}));
+            if method == reqwest::Method::DELETE {
+                request = client
+                    .request(method.clone(), &target)
+                    .json(&json!({"version":1}));
+            }
+            if let Some(token) = token {
+                request = request.bearer_auth(token);
+            }
+            assert_eq!(request.send().await.unwrap().status(), expected);
+        }
+    }
+    for body in [
+        json!({"version":1,"slug":"Bad","markdown":"lost"}),
+        json!({"version":0,"markdown":"lost"}),
+        json!({"markdown":"lost"}),
+        json!({"version":1}),
+        json!({"version":1,"owner_id":1}),
+    ] {
+        assert_eq!(
+            client
+                .patch(&target)
+                .bearer_auth(&tokens[0])
+                .json(&body)
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            400
+        );
+    }
+    client
+        .post(format!("{url}/pages"))
+        .bearer_auth(&admin)
+        .json(&json!({"slug":"taken","markdown":""}))
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap();
+    assert_eq!(
+        client
+            .patch(&target)
+            .bearer_auth(&tokens[0])
+            .json(&json!({"version":1,"slug":"taken","markdown":"lost"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        409
+    );
+    assert_eq!(
+        client
+            .get(&target)
+            .bearer_auth(&admin)
+            .send()
+            .await
+            .unwrap()
+            .json::<Value>()
+            .await
+            .unwrap(),
+        page
+    );
+    let first = client
+        .patch(&target)
+        .bearer_auth(&tokens[0])
+        .json(&json!({"version":1,"markdown":"first"}))
+        .send();
+    let second = client
+        .patch(&target)
+        .bearer_auth(&admin)
+        .json(&json!({"version":1,"markdown":"second"}))
+        .send();
+    let (first, second) = tokio::join!(first, second);
+    let mut statuses = [
+        first.unwrap().status().as_u16(),
+        second.unwrap().status().as_u16(),
+    ];
+    statuses.sort();
+    assert_eq!(statuses, [200, 409]);
+    let edit = client
+        .patch(&target)
+        .bearer_auth(&tokens[0])
+        .json(&json!({"version":2,"markdown":"third"}))
+        .send();
+    let delete = client
+        .delete(&target)
+        .bearer_auth(&admin)
+        .json(&json!({"version":2}))
+        .send();
+    let (edit, delete) = tokio::join!(edit, delete);
+    let (edit, delete) = (
+        edit.unwrap().status().as_u16(),
+        delete.unwrap().status().as_u16(),
+    );
+    assert!(
+        matches!((edit, delete), (200, 409) | (404, 204)),
+        "edit={edit}, delete={delete}"
+    );
+    let disposable: Value = client
+        .post(format!("{url}/pages"))
+        .bearer_auth(&admin)
+        .json(&json!({"markdown":"delete race"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let disposable_url = format!("{url}/pages/{}", disposable["id"]);
+    let first = client
+        .delete(&disposable_url)
+        .bearer_auth(&admin)
+        .json(&json!({"version":1}))
+        .send();
+    let second = client
+        .delete(&disposable_url)
+        .bearer_auth(&admin)
+        .json(&json!({"version":1}))
+        .send();
+    let (first, second) = tokio::join!(first, second);
+    let mut statuses = [
+        first.unwrap().status().as_u16(),
+        second.unwrap().status().as_u16(),
+    ];
+    statuses.sort();
+    assert_eq!(statuses, [204, 404]);
+    server.abort();
+}
