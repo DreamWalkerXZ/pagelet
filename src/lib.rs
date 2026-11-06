@@ -1,5 +1,6 @@
 mod deployment;
 pub use deployment::Deployment;
+mod ownership;
 mod pages;
 mod sessions;
 mod users;
@@ -224,6 +225,7 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/_/api/v1/me", get(me))
         .merge(sessions::routes())
+        .merge(ownership::routes())
         .route("/_/api/v1/users", get(users::list).post(users::create))
         .route(
             "/_/api/v1/pages",

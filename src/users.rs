@@ -38,11 +38,17 @@ pub(crate) async fn create(
     }
     let hash = hash_password(&body.password).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let token = new_token();
-    let db = state
+    let mut db = state
         .db
         .lock()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    db.execute(
+    let tx = db
+        .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if crate::authenticated_user_in(&tx, &headers, (state.clock)())?.role != "administrator" {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    tx.execute(
         "INSERT INTO users (username, role, password_hash, token_hash) VALUES (?1, ?2, ?3, ?4)",
         params![body.username, body.role, hash, token_hash(&token)],
     )
@@ -54,11 +60,13 @@ pub(crate) async fn create(
         }
         _ => StatusCode::INTERNAL_SERVER_ERROR,
     })?;
+    let id = tx.last_insert_rowid();
+    tx.commit().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok((
         StatusCode::CREATED,
         Json(CreatedUser {
             user: Account {
-                id: db.last_insert_rowid(),
+                id,
                 username: body.username,
                 role: body.role,
             },

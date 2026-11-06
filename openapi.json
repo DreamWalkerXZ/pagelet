@@ -1122,6 +1122,130 @@
           }
         }
       }
+    },
+    "/_/api/v1/users/{id}": {
+      "delete": {
+        "operationId": "deleteUser",
+        "summary": "Delete a page-free account and revoke its credentials and sessions; the final administrator is protected",
+        "security": [
+          {
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/CsrfHeader"
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Missing or revoked credentials"
+          },
+          "403": {
+            "description": "Administrator authority required"
+          },
+          "404": {
+            "description": "Page or account not found"
+          },
+          "409": {
+            "description": "Stale page version, user owns pages, or final administrator"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          },
+          "204": {
+            "description": "User deleted"
+          }
+        }
+      }
+    },
+    "/_/api/v1/pages/{id}/owner": {
+      "post": {
+        "operationId": "transferPageOwnership",
+        "summary": "Administrator-only versioned transfer preserving slug, content and password, revoking every page access grant",
+        "security": [
+          {
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "$ref": "#/components/parameters/CsrfHeader"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferOwnership"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "Missing or revoked credentials"
+          },
+          "403": {
+            "description": "Administrator authority required"
+          },
+          "404": {
+            "description": "Page or account not found"
+          },
+          "409": {
+            "description": "Stale page version, user owns pages, or final administrator"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          },
+          "200": {
+            "description": "Page transferred with an advanced version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed ownership request"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1530,6 +1654,36 @@
             "type": "integer",
             "description": "Absolute Unix timestamp in seconds, 24 hours after verification."
           }
+        }
+      },
+      "TransferOwnership": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "owner_id"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "owner_id": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "parameters": {
+      "CsrfHeader": {
+        "name": "X-Pagelet-CSRF",
+        "in": "header",
+        "required": false,
+        "description": "Required with value 1 for cookie-authenticated mutations; bearer authentication does not require it.",
+        "schema": {
+          "type": "string",
+          "const": "1"
         }
       }
     }
