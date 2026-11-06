@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Pagelet · Editor</title>
+    <link rel="stylesheet" href="/_/assets/reader.css" />
+    <link rel="stylesheet" href="/_/assets/app.css" />
+    <script type="module" src="/_/assets/app.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <header>
+      <span class="brand">Pagelet<span class="dot">.</span></span>
+      <nav aria-label="Management"><a href="/_/app/new">New page</a></nav>
+    </header>
+    <main id="content">
+      <p id="status" role="status">Loading…</p>
+      <p id="error" role="alert"></p>
+      <section id="login" hidden aria-labelledby="login-title">
+        <h1 id="login-title">Welcome back.</h1>
+        <p>Log in to publish and manage your pages.</p>
+        <form id="login-form">
+          <label for="username">Username</label
+          ><input id="username" autocomplete="username" required />
+          <label for="account-password">Account password</label
+          ><input
+            id="account-password"
+            type="password"
+            autocomplete="current-password"
+            required
+          />
+          <button>Log in</button>
+        </form>
+      </section>
+      <section id="editor" hidden aria-labelledby="editor-title">
+        <h1 id="editor-title">New page</h1>
+        <p>Publishing is immediate. Pages have no draft state.</p>
+        <form id="editor-form">
+          <div class="fields">
+            <div>
+              <label for="slug">Slug</label
+              ><input
+                id="slug"
+                maxlength="64"
+                aria-describedby="slug-help"
+              /><small id="slug-help"
+                >Leave empty when publishing for a generated address.</small
+              >
+            </div>
+            <div>
+              <label for="password-action">Password action</label
+              ><select id="password-action">
+                <option value="keep">Keep existing password</option>
+                <option value="replace">Set a new password</option>
+                <option value="remove">Remove password</option></select
+              ><label for="access-password">Access password</label
+              ><input
+                id="access-password"
+                type="password"
+                autocomplete="new-password"
+                aria-describedby="password-help"
+              /><small id="password-help"
+                >Optional. A password restricts visitor reading.</small
+              >
+            </div>
+          </div>
+          <div class="workspace">
+            <div>
+              <label for="markdown">Markdown</label
+              ><textarea id="markdown" spellcheck="false"></textarea>
+            </div>
+            <section aria-labelledby="preview-title">
+              <h2 id="preview-title">Live preview</h2>
+              <article id="preview" aria-label="Page preview"></article>
+            </section>
+          </div>
+          <div class="actions">
+            <button id="save">Publish page</button>
+            <a id="read" hidden>Read page</a>
+            <button id="reload" type="button" hidden>
+              Reload server version
+            </button>
+          </div>
+        </form>
+        <section id="danger" hidden>
+          <h2>Delete page</h2>
+          <p>
+            Deletion is permanent. The page cannot be restored and its slug
+            becomes available immediately.
+          </p>
+          <button id="delete" type="button">Delete permanently</button>
+        </section>
+      </section>
+      <noscript>This application requires JavaScript.</noscript>
+    </main>
+    <footer>Publish something worth sharing.</footer>
+  </body>
+</html>
