@@ -754,7 +754,7 @@
     "/_/api/v1/pages/by-slug/{slug}": {
       "get": {
         "operationId": "readPage",
-        "description": "Public Markdown source and metadata; Cache-Control: no-store. No rendered HTML.",
+        "description": "Known-link read. Access passwords cover API and raw content equally. Owners and administrators bypass protection with account credentials; visitors use X-Pagelet-Grant or their per-page HttpOnly cookie. Query-string credentials are ignored. All responses use Cache-Control: no-store.",
         "parameters": [
           {
             "name": "slug",
@@ -781,14 +781,43 @@
           },
           "500": {
             "description": "Internal persistence error"
+          },
+          "401": {
+            "description": "Password required; no page content, owner information, or timestamps.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordRequired"
+                }
+              }
+            }
           }
-        }
+        },
+        "security": [
+          {
+          },
+          {
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
+          },
+          {
+            "pageGrant": [
+
+            ]
+          }
+        ]
       }
     },
     "/_/raw/{slug}": {
       "get": {
         "operationId": "readRawPage",
-        "description": "Public Markdown, Cache-Control: no-store and X-Content-Type-Options: nosniff.",
+        "description": "Known-link read. Access passwords cover API and raw content equally. Owners and administrators bypass protection with account credentials; visitors use X-Pagelet-Grant or their per-page HttpOnly cookie. Query-string credentials are ignored. All responses use Cache-Control: no-store.",
         "parameters": [
           {
             "name": "slug",
@@ -815,8 +844,37 @@
           },
           "500": {
             "description": "Internal persistence error"
+          },
+          "401": {
+            "description": "Password required; no page content, owner information, or timestamps.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordRequired"
+                }
+              }
+            }
           }
-        }
+        },
+        "security": [
+          {
+          },
+          {
+            "bearerAuth": [
+
+            ]
+          },
+          {
+            "sessionAuth": [
+
+            ]
+          },
+          {
+            "pageGrant": [
+
+            ]
+          }
+        ]
       }
     },
     "/_/api/v1/pages/{id}": {
@@ -1002,6 +1060,67 @@
           }
         ]
       }
+    },
+    "/_/api/v1/pages/by-slug/{slug}/verify-password": {
+      "post": {
+        "operationId": "verifyPagePassword",
+        "description": "Rate limited to ten attempts per source and per immutable page within 60 seconds; process-local counters reset on restart. Correct password returns a 24-hour grant and sets a per-page HttpOnly cookie. Cache-Control: no-store. Password changes/removal, deletion, and ownership transfer revoke grants. Access changes cannot recall previously delivered content.",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyPagePassword"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Read-only page access grant and HttpOnly cookie.",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "pagelet_grant_{page_id}=...; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageGrant"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or page has no access password"
+          },
+          "401": {
+            "description": "Incorrect password or policy changed during verification"
+          },
+          "404": {
+            "description": "Page not found"
+          },
+          "429": {
+            "description": "Source or page attempt limit exceeded; retry after the 60-second window"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1015,6 +1134,12 @@
         "in": "cookie",
         "name": "pagelet_session",
         "description": "HttpOnly, SameSite=Lax, fixed seven-day expiry; API tokens are separate."
+      },
+      "pageGrant": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Pagelet-Grant",
+        "description": "A page-specific 24-hour visitor grant. Browser cookies are named pagelet_grant_{immutable_page_id}; HttpOnly, SameSite=Lax, Path=/."
       }
     },
     "schemas": {
@@ -1286,6 +1411,11 @@
             "maxLength": 64,
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
             "description": "Omit for a random 12-character lowercase alphanumeric slug. Collisions are retried."
+          },
+          "access_password": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Exact Unicode characters, without trimming or normalization. Empty string removes protection; omission preserves the current policy on edits."
           }
         }
       },
@@ -1335,9 +1465,14 @@
             "minLength": 1,
             "maxLength": 64,
             "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+          },
+          "access_password": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Exact Unicode characters, without trimming or normalization. Empty string removes protection; omission preserves the current policy on edits."
           }
         },
-        "description": "Provide at least one of markdown or slug. Every successful mutation advances the version."
+        "description": "Provide at least one of markdown, slug, or access_password. Every successful mutation advances the version; password changes and removal revoke all page grants."
       },
       "DeletePage": {
         "type": "object",
@@ -1349,6 +1484,50 @@
           "version": {
             "type": "integer",
             "minimum": 1
+          }
+        }
+      },
+      "PasswordRequired": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "const": "password_required"
+          }
+        }
+      },
+      "VerifyPagePassword": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      },
+      "PageGrant": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "grant",
+          "expires_at"
+        ],
+        "properties": {
+          "grant": {
+            "type": "string",
+            "description": "Read-only credential for X-Pagelet-Grant; revealed only at issuance."
+          },
+          "expires_at": {
+            "type": "integer",
+            "description": "Absolute Unix timestamp in seconds, 24 hours after verification."
           }
         }
       }

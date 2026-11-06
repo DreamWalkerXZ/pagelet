@@ -46,7 +46,7 @@ impl AppState {
         let transaction = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let version: i64 =
             transaction.pragma_query_value(None, "user_version", |row| row.get(0))?;
-        if version > 3 {
+        if version > 4 {
             bail!("Database schema is newer than this executable supports");
         }
         if version < 1 {
@@ -76,6 +76,9 @@ impl AppState {
         }
         if version < 3 {
             transaction.execute_batch("CREATE TABLE sessions (token_hash BLOB PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL); PRAGMA user_version = 3;")?;
+        }
+        if version < 4 {
+            transaction.execute_batch("CREATE TABLE page_grants (token_hash BLOB PRIMARY KEY, page_id INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL); PRAGMA user_version = 4;")?;
         }
         transaction.commit()?;
         Ok(Self {
@@ -232,6 +235,10 @@ pub fn router(state: AppState) -> Router {
                 .layer(axum::extract::DefaultBodyLimit::max(8 * 1024 * 1024)),
         )
         .route("/_/api/v1/pages/by-slug/{slug}", get(pages::read))
+        .route(
+            "/_/api/v1/pages/by-slug/{slug}/verify-password",
+            axum::routing::post(pages::verify_password),
+        )
         .route("/_/raw/{slug}", get(pages::raw))
         .route("/_/openapi.json", get(|| async { Json(openapi()) }))
         .layer(axum::middleware::from_fn(sessions::csrf))
