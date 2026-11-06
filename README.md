@@ -29,3 +29,16 @@ The data directory contains `pagelet.sqlite3`. Forward migrations run automatica
 ## Verify
 
 Run `cargo test` for executable CLI and real temporary SQLite/HTTP integration checks. `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` check formatting and compiler lints.
+
+Administrators can provision accounts with `POST /_/api/v1/users` using a bearer
+API token and a JSON body containing `username`, `password`, and `role`
+(`administrator` or `user`). The 201 response contains `user` metadata and its
+one-time `token`; save the token then, as account reads never disclose it.
+Usernames and roles cannot be changed. Duplicate usernames return 409; invalid
+credentials or roles return 400. Passwords preserve Unicode and spaces.
+
+`GET /_/api/v1/users` is administrator-only and returns
+`{users, total, page, per_page}`. It supports literal username substring `search`,
+1-based `page`, and `per_page` (20 by default, capped at 100). Results sort by
+username and ID. Missing credentials return 401; ordinary users receive 403.
+The public `/_/openapi.json` describes both operations and their schemas.

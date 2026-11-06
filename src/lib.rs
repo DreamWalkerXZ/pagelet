@@ -1,3 +1,5 @@
+mod users;
+
 use anyhow::{Context, Result, bail};
 use argon2::{
     Argon2, PasswordHasher,
@@ -173,6 +175,7 @@ async fn me(
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/_/api/v1/me", get(me))
+        .route("/_/api/v1/users", get(users::list).post(users::create))
         .route("/_/openapi.json", get(|| async { Json(openapi()) }))
         .with_state(state)
 }

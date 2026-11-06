@@ -1,20 +1,269 @@
 {
   "openapi": "3.1.0",
-  "info": {"title": "Pagelet API", "version": "1.0.0"},
+  "info": {
+    "title": "Pagelet API",
+    "version": "1.0.0"
+  },
   "paths": {
-    "/_/api/v1/me": {"get": {
-      "operationId": "getCurrentAccount",
-      "security": [{"bearerAuth": []}],
-      "responses": {
-        "200": {"description": "Current account, without stored credentials", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Account"}}}},
-        "401": {"description": "Missing or invalid bearer token"},
-        "500": {"description": "Internal persistence error"}
+    "/_/api/v1/me": {
+      "get": {
+        "operationId": "getCurrentAccount",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current account, without stored credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          }
+        }
       }
-    }},
-    "/_/openapi.json": {"get": {"operationId": "getOpenApi", "responses": {"200": {"description": "Public OpenAPI contract", "content": {"application/json": {"schema": {"type": "object"}}}}}}}
+    },
+    "/_/openapi.json": {
+      "get": {
+        "operationId": "getOpenApi",
+        "responses": {
+          "200": {
+            "description": "Public OpenAPI contract",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/_/api/v1/users": {
+      "post": {
+        "operationId": "createUser",
+        "description": "Administrator-only provisioning. Username and role are immutable; no public registration. Issues exactly one full-permission token, disclosed only in this response.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUser"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created account and one-time token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedUser"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON or parameters"
+          },
+          "401": {
+            "description": "Missing or invalid authentication"
+          },
+          "403": {
+            "description": "Administrator permission required"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          },
+          "409": {
+            "description": "Username already exists"
+          }
+        }
+      },
+      "get": {
+        "operationId": "listUsers",
+        "description": "Administrator-only literal case-sensitive username substring search, ordered by username then ID. No credentials returned.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 20,
+              "description": "Values above 100 are capped at 100."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated account metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON or parameters"
+          },
+          "401": {
+            "description": "Missing or invalid authentication"
+          },
+          "403": {
+            "description": "Administrator permission required"
+          },
+          "500": {
+            "description": "Internal persistence error"
+          }
+        }
+      }
+    }
   },
   "components": {
-    "securitySchemes": {"bearerAuth": {"type": "http", "scheme": "bearer"}},
-    "schemas": {"Account": {"type": "object", "required": ["id", "username", "role"], "properties": {"id": {"type": "integer"}, "username": {"type": "string"}, "role": {"type": "string", "enum": ["administrator", "user"]}}}}
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "Account": {
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "role"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "username": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "administrator",
+              "user"
+            ]
+          }
+        }
+      },
+      "CreateUser": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "username",
+          "password",
+          "role"
+        ],
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 32,
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 128,
+            "description": "Unicode characters, preserving spaces without trimming or normalization. Stored as an irreversible verifier.",
+            "writeOnly": true
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "administrator",
+              "user"
+            ]
+          }
+        }
+      },
+      "CreatedUser": {
+        "type": "object",
+        "required": [
+          "user",
+          "token"
+        ],
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/Account"
+          },
+          "token": {
+            "type": "string",
+            "description": "Full-permission bearer token disclosed once."
+          }
+        }
+      },
+      "UserList": {
+        "type": "object",
+        "required": [
+          "users",
+          "total",
+          "page",
+          "per_page"
+        ],
+        "properties": {
+          "users": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Account"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "per_page": {
+            "type": "integer"
+          }
+        }
+      }
+    }
   }
 }
