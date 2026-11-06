@@ -1,10 +1,10 @@
 # Pagelet
 
-A self-hosted Markdown publishing service. Phase one delivers the complete API, raw Markdown access, public OpenAPI contract, and local initialization/recovery CLI. Public reading pages, editor preview, and the browser management interface are phase two and are not included yet.
+A self-hosted Markdown publishing service distributed as one Rust executable with embedded browser assets and local SQLite storage. Publish short links, protect reading with a password, manage accounts and pages in the browser, or automate the same operations through the API. No external database or email service is required.
 
 ## Run
 
-Build with `cargo build --release`. SQLite is bundled into the executable; no database service is required.
+Build with a Rust toolchain supporting edition 2024 using `cargo build --release`. SQLite and all frontend assets are bundled into the executable. Node.js and loose web files are not required to build or run the service; vendored renderer files are checked in. Copy `target/release/pagelet` to your deployment directory.
 
 ```sh
 ./target/release/pagelet --data-dir ./data init
@@ -21,6 +21,34 @@ curl http://127.0.0.1:8080/_/openapi.json
 ```
 
 `GET /_/api/v1/me` returns only the account ID, username, and role. Passwords are stored as salted Argon2id verifiers; random 256-bit API tokens are stored only as SHA-256 hashes. Keep the data directory and token private. Deploy public HTTP behind an HTTPS reverse proxy. Configure the external URL and proxy trust explicitly as described below.
+
+## Browser workflows
+
+Open `http://127.0.0.1:8080/_/app/login` with the initialized administrator account. Create ordinary users or additional administrators under **Users**; give each person their initial password and save any token shown once. There is no public registration. Usernames and roles are fixed; the final administrator cannot be deleted, and a user must own no pages before deletion.
+
+Use **New page** to enter Markdown, inspect the live preview, optionally choose a slug and reading password, then publish. Empty pages publish immediately. **My pages** lists only your own pages, with slug search and pagination. Open a page to edit content, slug or password, or delete it permanently. Concurrent edits return a conflict; keep your unsaved text or explicitly reload the server version. Unsaved text lives in the current document and is lost on navigation or reload.
+
+**Account** changes your password or resets your API token. Copy a newly issued token before leaving or dismissing it: it cannot be retrieved later. Password changes revoke all browser sessions and rotate the token; token reset alone preserves sessions. **Log out** ends the current browser session.
+
+Administrators use **All pages** and **Users** to search and paginate the instance, filter pages by owner ID, transfer ownership, reset credentials and delete accounts/pages. Transfers require the latest version; the old owner immediately loses management privileges. Administrators are trusted: they can read and change every page, including password-protected pages, reset credentials and transfer ownership. A page access password does not hide content from administrators or the operator.
+
+Share `/<slug>` for reading. Visitors enter a page password when required; a page-specific HttpOnly cookie allows 24 hours of reading, including **Raw Markdown**. Owners and administrators bypass the password. Reader and editor preview share sanitized Markdown rendering: GFM tables, display-only task lists, strikethrough, autolinks and fenced code blocks. Raw HTML and dangerous link schemes are disabled. Images use external HTTP(S) URLs and contact their hosts when loaded; no image upload or proxy is provided.
+
+Reading and management require JavaScript. There is no server-rendered article, search-engine/social-preview support, or public page directory. There is no separate title or draft state, revision history, recycle bin, syntax highlighting or collaborative editing.
+
+| Route | Purpose |
+| --- | --- |
+| `/<slug>` | Public reader shell; protected content still requires authorization |
+| `/_/raw/<slug>` | UTF-8 Markdown source with the same reading policy |
+| `/_/app/login`, `/_/app/new` | Login and publication |
+| `/_/app/pages`, `/_/app/pages/<id>/edit` | Personal list and stable-ID editor |
+| `/_/app/account` | Password, token and logout |
+| `/_/app/admin/pages`, `/_/app/admin/users` | Administrator management |
+| `/_/api/v1/*` | Versioned JSON API |
+| `/_/openapi.json` | Public API contract |
+| `/_/assets/*` | Embedded scripts, styles and renderer dependencies |
+
+Changing or deleting a slug releases it immediately without a redirect or reservation. Old links may later display someone else's page. Page deletion is permanent at the application level, including password verifiers and grants, but cannot recall downloaded content or erase historical backups/storage media. Account deletion revokes its credentials. Keep private backups and treat shared links accordingly.
 
 ## Persistence and upgrades
 
@@ -163,7 +191,7 @@ permissive CORS headers at the proxy. TLS termination does not replace CSRF
 protection. The external URL is deployment configuration, not built-in TLS or a
 redirect service.
 
-## API-phase acceptance
+## Release acceptance
 
 `cargo test --test acceptance` runs the actual executable with a real temporary SQLite directory through initialization, user provisioning, publication/raw reading, password verification, token rotation, ownership transfer, and permanent account/page deletion. It stops the process, copies the entire current data directory, and runs the restored instance from the copy. Requests and observed responses are checked against the public OpenAPI operation's status, media type, and structural schemas (references, required fields, types, enums, and constants), including conflicts and rate limits. This is a focused contract regression check, not a general OpenAPI/JSON Schema conformance engine.
 
@@ -176,4 +204,20 @@ cargo clippy --all-targets -- -D warnings
 cargo build --release
 ```
 
-Visitors cannot enumerate users/pages or publish anonymously. There is no public registration, role editing, account suspension, backend HTML rendering, attachment storage, online backup, or database downgrade. Browser rendering and end-to-end browser checks belong to phase two.
+Visitors cannot enumerate users/pages or publish anonymously. There is no public registration, role editing, account suspension, backend HTML rendering, attachment storage, online backup, or database downgrade. The API and embedded browser delivery phases are complete.
+
+Browser acceptance uses Node.js 24+, npm 11+ and Chromium only as development tools:
+
+```sh
+npm ci
+npx playwright install chromium
+PAGELET_BROWSER_BINARY=target/release/pagelet npm run test:browser
+```
+
+The browser runner copies the selected executable into a fresh temporary directory and runs it there, without loose frontend files. Each spec gets a fresh instance to isolate process-local rate limits. Omit `PAGELET_BROWSER_BINARY` to build and test the debug executable; use `PAGELET_BROWSER_PORT` to select a free port (default 18971). Browser suites cover reader/GFM sanitization, password grants/raw reads, editing/conflicts, account isolation, credential rotation, administrator transfer/deletion and embedded routes/assets. See [browser test notes](tests/browser/README.md).
+
+No performance threshold, multi-instance coordination, online backup or built-in TLS is promised. Rate limits reset on restart. Run one service process per data directory.
+
+## License
+
+Pagelet is licensed under the [MIT License](LICENSE), copyright 2026 DreamWalkerXZ. Vendored frontend dependencies retain their own notices in [web/vendor](web/vendor): Marked (MIT) and DOMPurify (Apache-2.0 OR MPL-2.0). Preserve these notices when redistributing the executable and sources.

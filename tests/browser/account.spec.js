@@ -110,6 +110,7 @@ test("personal lists isolate owners, search and paginate; credentials transition
   await page.getByLabel("Username").fill("account-owner");
   await page.getByLabel("Account password").fill("replacement password");
   await page.getByRole("button", { name: "Log in", exact: true }).click();
+  await expect(page).toHaveURL(/\/_\/app\/new$/);
   await page.goto("/_/app/account");
   await page.getByRole("button", { name: "Log out", exact: true }).click();
   await expect(page).toHaveURL(/\/_\/app\/login$/);

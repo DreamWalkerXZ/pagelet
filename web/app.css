@@ -22,7 +22,7 @@ nav,
 #status:empty {
   display: none;
 }
-input,
+input:not([type="checkbox"]),
 textarea,
 select {
   width: 100%;
@@ -34,7 +34,7 @@ select {
   border: 1px solid var(--line);
   border-radius: 5px;
 }
-input,
+input:not([type="checkbox"]),
 select {
   margin-bottom: 10px;
 }
