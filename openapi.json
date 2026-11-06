@@ -2,6 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Pagelet API",
+    "description": "HTTPS deployment uses an explicit external URL for Secure cookies and trusted proxy IP/CIDRs for effective source-IP limits. Untrusted forwarding headers are ignored. Malformed trusted X-Forwarded-For chains return 400 on login/password verification; source and target limits both apply. See README for proxy and CSRF configuration.",
     "version": "1.0.0"
   },
   "paths": {
@@ -1093,7 +1094,7 @@
                 "schema": {
                   "type": "string"
                 },
-                "description": "pagelet_grant_{page_id}=...; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400"
+                "description": "pagelet_grant_{page_id}=...; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400 (Secure when the external URL uses HTTPS)"
               }
             },
             "content": {

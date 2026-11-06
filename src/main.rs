@@ -22,6 +22,10 @@ enum Command {
     Serve {
         #[arg(long, env = "PAGELET_LISTEN", default_value = "127.0.0.1:8080")]
         listen: String,
+        #[arg(long, env = "PAGELET_EXTERNAL_URL")]
+        external_url: Option<String>,
+        #[arg(long, env = "PAGELET_TRUSTED_PROXIES", value_delimiter = ',')]
+        trusted_proxy: Vec<String>,
     },
 }
 
@@ -74,7 +78,18 @@ async fn main() -> Result<()> {
             println!("API token: {token}");
             println!("Save this token now; it cannot be retrieved later.");
         }
-        Command::Serve { listen } => pagelet::serve(state, &listen).await?,
+        Command::Serve {
+            listen,
+            external_url,
+            trusted_proxy,
+        } => {
+            let mut state = state;
+            state.deployment = pagelet::Deployment::new(
+                external_url.as_deref(),
+                trusted_proxy.iter().map(String::as_str),
+            )?;
+            pagelet::serve(state, &listen).await?;
+        }
     }
     Ok(())
 }
