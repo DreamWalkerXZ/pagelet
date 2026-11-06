@@ -266,7 +266,7 @@ async fn user_validation_search_and_pagination_match_the_contract() {
                 .await
                 .unwrap()
                 .status(),
-            404
+            405
         );
     }
     server.abort();
