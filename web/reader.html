@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Pagelet</title>
+    <link rel="stylesheet" href="/_/assets/reader.css" />
+    <script type="module" src="/_/assets/reader.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <header>
+      <span class="brand">Pagelet<span class="dot">.</span></span
+      ><a id="raw" hidden>Raw Markdown</a>
+    </header>
+    <main id="content">
+      <p id="status" role="status">Loading page…</p>
+      <section id="challenge" hidden aria-labelledby="password-title">
+        <span class="eyebrow">PRIVATE PAGE</span>
+        <h1 id="password-title">A password opens this page.</h1>
+        <p>Enter the access password shared with you.</p>
+        <form>
+          <label for="password">Access password</label>
+          <input
+            id="password"
+            type="password"
+            autocomplete="off"
+            required
+            maxlength="256"
+            aria-describedby="password-error"
+          />
+          <button>Open page</button>
+          <p id="password-error" role="alert"></p>
+        </form>
+      </section>
+      <article hidden aria-label="Page content"></article>
+      <noscript>This page requires JavaScript to display Markdown.</noscript>
+    </main>
+    <footer>Published with Pagelet</footer>
+  </body>
+</html>

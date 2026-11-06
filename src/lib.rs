@@ -4,6 +4,7 @@ mod ownership;
 mod pages;
 mod sessions;
 mod users;
+mod web;
 
 use anyhow::{Context, Result, bail};
 use argon2::{
@@ -223,6 +224,7 @@ async fn me(
 
 pub fn router(state: AppState) -> Router {
     Router::new()
+        .merge(web::routes())
         .route("/_/api/v1/me", get(me))
         .merge(sessions::routes())
         .merge(ownership::routes())

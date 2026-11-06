@@ -463,7 +463,7 @@ pub(crate) async fn delete(
     Ok(StatusCode::NO_CONTENT)
 }
 
-fn valid_slug(slug: &str) -> bool {
+pub(crate) fn valid_slug(slug: &str) -> bool {
     (1..=64).contains(&slug.len())
         && !slug.starts_with('-')
         && !slug.ends_with('-')
