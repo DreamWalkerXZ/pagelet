@@ -101,3 +101,37 @@ small {
     min-height: 300px;
   }
 }
+
+#view > section,
+#secret {
+  border-top: 1px solid var(--line);
+  margin-top: 36px;
+  padding-top: 12px;
+}
+#password-form,
+#search-form {
+  max-width: 560px;
+}
+#rows {
+  list-style: none;
+  padding: 0;
+  margin-top: 28px;
+}
+#rows li {
+  border-top: 1px solid var(--line);
+  padding: 14px 0;
+  overflow-wrap: anywhere;
+}
+#secret input {
+  font-family: ui-monospace, monospace;
+}
+@media (max-width: 760px) {
+  header {
+    align-items: flex-start;
+    gap: 24px;
+  }
+  nav {
+    gap: 12px;
+    justify-content: flex-end;
+  }
+}

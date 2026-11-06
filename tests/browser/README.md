@@ -33,3 +33,13 @@ expiry is covered by the controllable-clock Rust HTTP tests.
 Paths are relative to `/_/api/v1` (for example `/me`). It uses same-origin cookies,
 adds the CSRF header, returns parsed JSON (or null for 204), and throws an error
 with `status` for HTTP failures. No account API token is used or stored.
+
+Personal management routes are `/_/app/pages` and `/_/app/account`. Lists always
+filter by the current owner, including for administrators. Newly issued tokens
+live only in the current document and are cleared on dismissal or page exit.
+Password changes show the rotated token before offering login again.
+Set `PAGELET_BROWSER_PORT` to use a different free test-server port.
+The default browser command runs each spec against a fresh temporary instance so
+real process-local login limits do not accumulate across independent suites.
+Pass a spec filename to run only that spec, for example
+`npm run test:browser -- account.spec.js`.

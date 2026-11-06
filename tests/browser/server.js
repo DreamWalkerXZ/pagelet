@@ -16,7 +16,13 @@ const init = spawnSync(
 if (init.status !== 0) throw new Error(init.stderr);
 const server = spawn(
   "target/debug/pagelet",
-  ["--data-dir", directory, "serve", "--listen", "127.0.0.1:18971"],
+  [
+    "--data-dir",
+    directory,
+    "serve",
+    "--listen",
+    `127.0.0.1:${process.env.PAGELET_BROWSER_PORT || 18971}`,
+  ],
   { stdio: "inherit" },
 );
 process.on("SIGTERM", () => {
