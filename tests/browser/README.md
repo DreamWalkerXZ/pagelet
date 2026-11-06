@@ -15,7 +15,7 @@ Tests exercise HTTP APIs and visible browser behavior, without business-rule moc
 External image loading is aborted at the network boundary in the GFM fixture.
 
 `/_/assets/renderer.js` exports `renderMarkdown(source)`, returning sanitized HTML
-for both public reading and future editor preview. Assign its return value to the
+for both public reading and editor preview. Assign its return value to the
 preview container's `innerHTML`; do not append unsanitized HTML afterwards.
 
 Grant expiry and transitions are covered using controllable server time in the
@@ -43,3 +43,9 @@ The default browser command runs each spec against a fresh temporary instance so
 real process-local login limits do not accumulate across independent suites.
 Pass a spec filename to run only that spec, for example
 `npm run test:browser -- account.spec.js`.
+
+For final embedded release acceptance, run `cargo build --release`, then
+`PAGELET_BROWSER_BINARY=target/release/pagelet npm run test:browser`. The selected
+binary is copied into the temporary directory and used for both initialization and
+serving, with that directory as its working directory and no loose frontend files.
+No source checkout or Node.js is needed by the service process.
