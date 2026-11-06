@@ -42,3 +42,17 @@ credentials or roles return 400. Passwords preserve Unicode and spaces.
 1-based `page`, and `per_page` (20 by default, capped at 100). Results sort by
 username and ID. Missing credentials return 401; ordinary users receive 403.
 The public `/_/openapi.json` describes both operations and their schemas.
+
+Authenticated users publish immediately with `POST /_/api/v1/pages`, sending
+`{"markdown":"# Hello","slug":"hello"}`. Omit `slug` for a generated address;
+empty Markdown is allowed. Custom slugs use 1–64 lowercase ASCII letters, digits,
+and single interior hyphens. Occupied custom slugs return 409. Markdown is limited
+to 1 MiB of UTF-8 bytes; JSON request bodies are bounded at 8 MiB to allow escaping.
+
+Read source and metadata at `GET /_/api/v1/pages/by-slug/hello`, or plain Markdown
+at `GET /_/raw/hello`. Content responses disallow caching. Page IDs are immutable;
+timestamps are Unix milliseconds and initial versions are 1. There is no rendered
+HTML endpoint. `GET /_/api/v1/pages` requires account authentication and returns
+metadata only, with `search`, `page` (default 1), and `per_page` (default 20,
+capped at 100). Ordinary users see their pages; administrators see all and can
+filter by `owner_id`. Results use descending update time, then descending ID.

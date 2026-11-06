@@ -122,7 +122,7 @@ fn initialization_rejects_invalid_credentials_without_creating_an_account() {
 fn newer_schema_is_rejected_before_initialization() {
     let directory = tempfile::tempdir().unwrap();
     let database = rusqlite::Connection::open(directory.path().join("pagelet.sqlite3")).unwrap();
-    database.pragma_update(None, "user_version", 2).unwrap();
+    database.pragma_update(None, "user_version", 999).unwrap();
     drop(database);
     let result = Command::new(env!("CARGO_BIN_EXE_pagelet"))
         .args(["--data-dir", directory.path().to_str().unwrap(), "init"])
