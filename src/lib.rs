@@ -1,3 +1,4 @@
+mod sessions;
 mod users;
 
 use anyhow::{Context, Result, bail};
@@ -23,6 +24,8 @@ use std::{
 #[derive(Clone)]
 pub struct AppState {
     pub db: Arc<Mutex<Connection>>,
+    pub clock: Arc<dyn Fn() -> i64 + Send + Sync>,
+    pub limits: Arc<Mutex<sessions::RateLimiter>>,
 }
 
 #[derive(Serialize)]
@@ -41,7 +44,7 @@ impl AppState {
         let transaction = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let version: i64 =
             transaction.pragma_query_value(None, "user_version", |row| row.get(0))?;
-        if version > 1 {
+        if version > 3 {
             bail!("Database schema is newer than this executable supports");
         }
         if version < 1 {
@@ -55,9 +58,19 @@ impl AppState {
             ); PRAGMA user_version = 1;",
             )?;
         }
+        if version < 3 {
+            transaction.execute_batch("CREATE TABLE sessions (token_hash BLOB PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL); PRAGMA user_version = 3;")?;
+        }
         transaction.commit()?;
         Ok(Self {
             db: Arc::new(Mutex::new(db)),
+            clock: Arc::new(|| {
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as i64
+            }),
+            limits: Arc::new(Mutex::new(sessions::RateLimiter::default())),
         })
     }
 
@@ -139,6 +152,9 @@ pub fn token_hash(token: &str) -> Vec<u8> {
 }
 
 pub fn authenticated_user(state: &AppState, headers: &HeaderMap) -> Result<Account, StatusCode> {
+    if !headers.contains_key("authorization") {
+        return sessions::authenticate(state, headers);
+    }
     let token = headers
         .get("authorization")
         .and_then(|header| header.to_str().ok())
@@ -175,8 +191,10 @@ async fn me(
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/_/api/v1/me", get(me))
+        .merge(sessions::routes())
         .route("/_/api/v1/users", get(users::list).post(users::create))
         .route("/_/openapi.json", get(|| async { Json(openapi()) }))
+        .layer(axum::middleware::from_fn(sessions::csrf))
         .with_state(state)
 }
 
@@ -190,10 +208,13 @@ pub async fn serve(state: AppState, listen: &str) -> Result<()> {
     let listener = tokio::net::TcpListener::bind(listen)
         .await
         .context("Could not bind HTTP listener")?;
-    axum::serve(listener, router(state))
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
-        .await?;
+    axum::serve(
+        listener,
+        router(state).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(async {
+        let _ = tokio::signal::ctrl_c().await;
+    })
+    .await?;
     Ok(())
 }
