@@ -5,6 +5,7 @@ use std::{
     io::{self, IsTerminal, Write},
     path::PathBuf,
 };
+use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
 #[command(version, about = "Self-hosted Markdown publishing")]
@@ -48,6 +49,26 @@ fn read_input(prompt: &str, hidden: bool) -> Result<String> {
     Ok(input)
 }
 
+fn init_logging() -> Result<()> {
+    const DEFAULT_FILTER: &str = "pagelet=info";
+    let configured = match std::env::var("RUST_LOG") {
+        Ok(value) if !value.trim().is_empty() => EnvFilter::try_new(value).map_err(|_| ()),
+        Err(std::env::VarError::NotUnicode(_)) => Err(()),
+        _ => Ok(EnvFilter::new(DEFAULT_FILTER)),
+    };
+    let invalid = configured.is_err();
+    tracing_subscriber::fmt()
+        .with_env_filter(configured.unwrap_or_else(|_| EnvFilter::new(DEFAULT_FILTER)))
+        .with_writer(io::stderr)
+        .with_ansi(false)
+        .try_init()
+        .map_err(anyhow::Error::msg)?;
+    if invalid {
+        tracing::warn!(event = %"invalid_log_filter", "Invalid RUST_LOG. Using pagelet=info.");
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -83,6 +104,7 @@ async fn main() -> Result<()> {
             external_url,
             trusted_proxy,
         } => {
+            init_logging()?;
             let mut state = state;
             state.deployment = pagelet::Deployment::new(
                 external_url.as_deref(),

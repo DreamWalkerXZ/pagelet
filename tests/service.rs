@@ -1,8 +1,91 @@
 use std::{
-    io::Write,
-    process::{Command, Stdio},
+    io::{Read, Write},
+    path::Path,
+    process::{Child, Command, Stdio},
     time::Duration,
 };
+
+struct TestServer(Child);
+
+impl Drop for TestServer {
+    fn drop(&mut self) {
+        if matches!(self.0.try_wait(), Ok(None)) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+}
+
+fn has_event(logs: &str, fields: &[&str]) -> bool {
+    logs.lines().any(|line| {
+        fields
+            .iter()
+            .all(|field| line.split_whitespace().any(|part| part == *field))
+    })
+}
+
+async fn start_server(
+    directory: &Path,
+    client: &reqwest::Client,
+    filter: Option<&str>,
+) -> (TestServer, String) {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    drop(listener);
+    let mut command = Command::new(env!("CARGO_BIN_EXE_pagelet"));
+    command.env_remove("RUST_LOG");
+    if let Some(filter) = filter {
+        command.env("RUST_LOG", filter);
+    }
+    let server = TestServer(
+        command
+            .env("PAGELET_DATA_DIR", directory)
+            .env("PAGELET_LISTEN", address.to_string())
+            .arg("serve")
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap(),
+    );
+    let url = format!("http://{address}/_/api/v1/me");
+    for _ in 0..100 {
+        if client.get(&url).send().await.is_ok() {
+            return (server, address.to_string());
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("server did not start");
+}
+
+async fn stop_server(mut server: TestServer) -> String {
+    let server = &mut server.0;
+    let signaled = Command::new("kill")
+        .args(["-s", "INT", &server.id().to_string()])
+        .status()
+        .unwrap();
+    assert!(signaled.success());
+    for _ in 0..100 {
+        if server.try_wait().unwrap().is_some() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    if server.try_wait().unwrap().is_none() {
+        server.kill().unwrap();
+    }
+    assert!(
+        server.wait().unwrap().success(),
+        "server did not shut down gracefully"
+    );
+    let mut logs = String::new();
+    server
+        .stderr
+        .take()
+        .unwrap()
+        .read_to_string(&mut logs)
+        .unwrap();
+    logs
+}
 
 #[tokio::test]
 async fn initialized_account_survives_restart_and_authenticates() {
@@ -31,25 +114,9 @@ async fn initialized_account_survives_restart_and_authenticates() {
         .lines()
         .find_map(|line| line.strip_prefix("API token: "))
         .unwrap();
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = listener.local_addr().unwrap();
-    drop(listener);
-    let mut server = Command::new(binary)
-        .env("PAGELET_DATA_DIR", directory.path())
-        .env("PAGELET_LISTEN", address.to_string())
-        .arg("serve")
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
     let client = reqwest::Client::new();
+    let (server, address) = start_server(directory.path(), &client, None).await;
     let url = format!("http://{address}/_/api/v1/me");
-    for _ in 0..100 {
-        if client.get(&url).send().await.is_ok() {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
     let response = client.get(&url).bearer_auth(token).send().await.unwrap();
     let status = response.status();
     let body: serde_json::Value = response.json().await.unwrap();
@@ -79,31 +146,25 @@ async fn initialized_account_survives_restart_and_authenticates() {
             .unwrap();
         assert_eq!(response.status(), expected);
     }
-    let signaled = Command::new("kill")
-        .args(["-s", "INT", &server.id().to_string()])
-        .status()
-        .unwrap();
-    assert!(signaled.success());
-    for _ in 0..100 {
-        if server.try_wait().unwrap().is_some() {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
-    if server.try_wait().unwrap().is_none() {
-        server.kill().unwrap();
-    }
-    let stopped = server.wait_with_output().unwrap();
-    assert!(
-        stopped.status.success(),
-        "server did not shut down gracefully"
-    );
-    let logs = String::from_utf8(stopped.stderr).unwrap();
-    assert!(logs.contains(&format!("INFO event=listening address={address}")));
-    assert!(logs.contains("INFO event=login_succeeded username=admin"));
-    assert!(logs.contains("WARN event=login_failed source=127.0.0.1"));
-    assert!(logs.contains("INFO event=shutdown_requested signal=SIGINT"));
-    assert!(logs.contains("INFO event=shutdown_completed"));
+    let logs = stop_server(server).await;
+    assert!(has_event(
+        &logs,
+        &["INFO", "event=listening", &format!("address={address}")]
+    ));
+    assert!(has_event(
+        &logs,
+        &["INFO", "event=login_succeeded", "username=admin"]
+    ));
+    assert!(has_event(
+        &logs,
+        &["WARN", "event=login_failed", "source=127.0.0.1"]
+    ));
+    assert!(has_event(
+        &logs,
+        &["INFO", "event=shutdown_requested", "signal=SIGINT"]
+    ));
+    assert!(has_event(&logs, &["INFO", "event=shutdown_completed"]));
+    assert!(!logs.contains("event=request_completed"));
     for secret in [
         token,
         "a long password",
@@ -173,4 +234,133 @@ fn newer_schema_is_rejected_before_initialization() {
         .unwrap();
     assert!(!result.status.success());
     assert!(String::from_utf8_lossy(&result.stderr).contains("newer"));
+}
+
+#[tokio::test]
+async fn service_filters_logs_and_only_summarizes_safe_request_fields_at_debug() {
+    let directory = tempfile::tempdir().unwrap();
+    let state = pagelet::AppState::open(directory.path()).unwrap();
+    let token = state.initialize("admin", "a long password").unwrap();
+    drop(state);
+    let client = reqwest::Client::new();
+
+    for (filter, info, debug, invalid) in [
+        ("pagelet=warn", false, false, false),
+        ("pagelet=debug", true, true, false),
+        ("pagelet=debug,pagelet[{username}]=off", true, true, false),
+        ("pagelet=invalid-log-level-marker", true, false, true),
+        ("", true, false, false),
+    ] {
+        let (server, address) = start_server(directory.path(), &client, Some(filter)).await;
+        let base = format!("http://{address}");
+        let matched = client
+            .get(format!(
+                "{base}/_/api/v1/pages/by-slug/private-slug-marker?q=private-query-marker"
+            ))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(matched.status(), 404);
+        let unmatched = client
+            .get(format!("{base}/no-matched-route-marker/extra"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(unmatched.status(), 404);
+        let rejected = client
+            .post(format!("{base}/_/api/v1/login"))
+            .header("cookie", "pagelet_session=private-cookie-marker")
+            .body("private-body-marker")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(rejected.status(), 403);
+        let failed = client
+            .post(format!("{base}/_/api/v1/login"))
+            .header("x-pagelet-csrf", "1")
+            .json(&serde_json::json!({"username":"admin","password":"private-password-marker"}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(failed.status(), 401);
+
+        let logs = stop_server(server).await;
+        assert_eq!(
+            has_event(&logs, &["INFO", "event=listening"]),
+            info,
+            "filter {filter}"
+        );
+        assert_eq!(
+            has_event(&logs, &["INFO", "event=shutdown_completed"]),
+            info
+        );
+        assert!(has_event(
+            &logs,
+            &["WARN", "event=login_failed", "source=127.0.0.1"]
+        ));
+        assert_eq!(
+            logs.matches("event=invalid_log_filter").count(),
+            usize::from(invalid)
+        );
+        assert_eq!(
+            has_event(&logs, &["WARN", "event=invalid_log_filter"]),
+            invalid
+        );
+        assert!(!logs.contains("ERROR"));
+        let summaries: Vec<_> = logs
+            .lines()
+            .filter(|line| line.contains("event=request_completed"))
+            .collect();
+        if debug {
+            for (method, route, status) in [
+                ("GET", "/_/api/v1/pages/by-slug/{slug}", 404),
+                ("GET", "unmatched", 404),
+                ("POST", "/_/api/v1/login", 403),
+                ("POST", "/_/api/v1/login", 401),
+            ] {
+                let fields = [
+                    format!("method={method}"),
+                    format!("route={route}"),
+                    format!("status={status}"),
+                ];
+                let matches: Vec<_> = summaries
+                    .iter()
+                    .filter(|line| {
+                        fields
+                            .iter()
+                            .all(|field| line.split_whitespace().any(|part| part == field))
+                    })
+                    .collect();
+                assert_eq!(
+                    matches.len(),
+                    1,
+                    "expected one summary for {method} {route} {status}"
+                );
+                assert!(matches[0].contains("DEBUG"));
+                assert!(!matches[0].contains("source="));
+                let elapsed: f64 = matches[0]
+                    .split_whitespace()
+                    .find_map(|field| field.strip_prefix("elapsed_ms="))
+                    .unwrap()
+                    .parse()
+                    .unwrap();
+                assert!(elapsed.is_finite() && elapsed >= 0.0);
+            }
+        } else {
+            assert!(summaries.is_empty(), "filter {filter}");
+        }
+        for secret in [
+            token.as_str(),
+            "private-slug-marker",
+            "private-query-marker",
+            "no-matched-route-marker",
+            "private-cookie-marker",
+            "private-body-marker",
+            "private-password-marker",
+            "invalid-log-level-marker",
+        ] {
+            assert!(!logs.contains(secret), "logs included a sensitive value");
+        }
+    }
 }

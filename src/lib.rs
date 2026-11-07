@@ -13,8 +13,10 @@ use argon2::{
 };
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{MatchedPath, Request, State},
     http::{HeaderMap, StatusCode},
+    middleware::Next,
+    response::Response,
     routing::get,
 };
 use rand::RngCore;
@@ -262,6 +264,7 @@ pub fn router(state: AppState) -> Router {
         .route("/_/raw/{slug}", get(pages::raw))
         .route("/_/openapi.json", get(|| async { Json(openapi()) }))
         .layer(axum::middleware::from_fn(sessions::csrf))
+        .layer(axum::middleware::from_fn(log_request))
         .with_state(state)
 }
 
@@ -270,17 +273,18 @@ pub fn openapi() -> serde_json::Value {
         .expect("Bundled OpenAPI must be valid JSON")
 }
 
-pub(crate) fn log_event(level: &str, event: std::fmt::Arguments<'_>) {
-    let elapsed = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default();
-    use std::io::Write;
-    let _ = writeln!(
-        std::io::stderr().lock(),
-        "{}.{:03} {level} {event}",
-        elapsed.as_secs(),
-        elapsed.subsec_millis()
+async fn log_request(path: Option<MatchedPath>, request: Request, next: Next) -> Response {
+    let method = request.method().clone();
+    let start = std::time::Instant::now();
+    let response = next.run(request).await;
+    tracing::debug!(
+        event = %"request_completed",
+        %method,
+        route = %path.as_ref().map_or("unmatched", MatchedPath::as_str),
+        status = response.status().as_u16(),
+        elapsed_ms = start.elapsed().as_secs_f64() * 1000.0,
     );
+    response
 }
 
 pub async fn serve(state: AppState, listen: &str) -> Result<()> {
@@ -288,27 +292,19 @@ pub async fn serve(state: AppState, listen: &str) -> Result<()> {
     let listener = tokio::net::TcpListener::bind(listen)
         .await
         .context("Could not bind HTTP listener")?;
-    log_event(
-        "INFO",
-        format_args!("event=listening address={}", listener.local_addr()?),
-    );
+    let address = listener.local_addr()?;
+    tracing::info!(event = %"listening", %address);
     axum::serve(
         listener,
         router(state).into_make_service_with_connect_info::<std::net::SocketAddr>(),
     )
     .with_graceful_shutdown(async {
         match tokio::signal::ctrl_c().await {
-            Ok(()) => log_event(
-                "INFO",
-                format_args!("event=shutdown_requested signal=SIGINT"),
-            ),
-            Err(error) => log_event(
-                "ERROR",
-                format_args!("event=shutdown_signal_error error={error}"),
-            ),
+            Ok(()) => tracing::info!(event = %"shutdown_requested", signal = %"SIGINT"),
+            Err(error) => tracing::error!(event = %"shutdown_signal_error", %error),
         }
     })
     .await?;
-    log_event("INFO", format_args!("event=shutdown_completed"));
+    tracing::info!(event = %"shutdown_completed");
     Ok(())
 }

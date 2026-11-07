@@ -70,6 +70,25 @@ Copy the **entire** directory, including any SQLite journal or sidecar files. Ch
 
 To restore, stop Pagelet again, move the current data directory aside, and copy the chosen backup back to the configured path. Preserve ownership and permissions, then start a compatible executable and verify account authentication and representative pages before reopening public traffic. Never overlay a backup onto an active or partially populated directory. A backup restores the whole instance as of that copy, including credentials and grants; later edits and credential rotations will be lost. Keep the previous binary with its pre-upgrade backup if rollback is needed: do not open an upgraded database with an older binary. Migrations run before serving requests, and a newer unsupported schema is refused without attempting a downgrade.
 
+## Service logs
+
+`pagelet serve` writes timestamped text events to stderr. It defaults to
+`pagelet=info` when `RUST_LOG` is unset or empty. An invalid filter logs a
+warning and uses that default.
+
+```sh
+RUST_LOG=pagelet=warn pagelet serve
+RUST_LOG=pagelet=debug pagelet serve
+```
+
+ERROR records shutdown signal listener failures. INFO records lifecycle and
+key account and page events. WARN records failed logins, rate limits, and
+invalid log filters. DEBUG adds one summary per
+response with the HTTP method, matched route template (or `unmatched`),
+numeric status, and processing time in milliseconds. Request summaries omit
+actual paths, query strings, IP addresses, headers, and bodies. Pagelet
+events exclude passwords, tokens, cookies, and Markdown.
+
 ## Verify
 
 Run `cargo test` for executable CLI and real temporary SQLite/HTTP integration checks. `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` check formatting and compiler lints.

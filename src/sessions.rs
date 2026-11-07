@@ -60,10 +60,7 @@ pub(crate) fn check_rate(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .check(scope, source, target, now);
     if result == Err(StatusCode::TOO_MANY_REQUESTS) {
-        crate::log_event(
-            "WARN",
-            format_args!("event={scope}_rate_limited source={source}"),
-        );
+        tracing::warn!(event = %format_args!("{scope}_rate_limited"), %source);
     }
     result
 }
@@ -135,7 +132,7 @@ async fn login(
         .deployment
         .source(peer.ok().map(|p| p.0.ip()), &headers)?;
     let failed = || {
-        crate::log_event("WARN", format_args!("event=login_failed source={source}"));
+        tracing::warn!(event = %"login_failed", %source);
         StatusCode::UNAUTHORIZED
     };
     check_rate(&state, "login", &source, &body.username, now)?;
@@ -180,10 +177,7 @@ async fn login(
         .unwrap(),
     );
     headers.insert("cache-control", "no-store".parse().unwrap());
-    crate::log_event(
-        "INFO",
-        format_args!("event=login_succeeded username={}", body.username),
-    );
+    tracing::info!(event = %"login_succeeded", username = %body.username);
     Ok((headers, Json(json!({"id":id}))))
 }
 async fn logout(
