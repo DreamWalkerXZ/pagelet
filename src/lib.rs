@@ -160,6 +160,18 @@ pub fn validate_password(password: &str) -> Result<()> {
     Ok(())
 }
 
+fn pagination(page: Option<u64>, per_page: Option<u64>) -> Result<(u64, u64, i64), StatusCode> {
+    let page = page.unwrap_or(1);
+    let per_page = per_page.unwrap_or(20).min(100);
+    let offset = page
+        .checked_sub(1)
+        .and_then(|page| page.checked_mul(per_page))
+        .and_then(|offset| i64::try_from(offset).ok())
+        .filter(|_| per_page != 0)
+        .ok_or(StatusCode::BAD_REQUEST)?;
+    Ok((page, per_page, offset))
+}
+
 pub fn hash_password(password: &str) -> Result<String> {
     Argon2::default()
         .hash_password(password.as_bytes(), &SaltString::generate(&mut OsRng))

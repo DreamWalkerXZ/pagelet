@@ -1,5 +1,80 @@
 import { test, expect } from "@playwright/test";
 
+test("created user's one-time token survives a failed list refresh", async ({
+  page,
+}) => {
+  const headers = { "x-pagelet-csrf": "1" };
+  await page.request.post("/_/api/v1/login", {
+    headers,
+    data: { username: "admin", password: "browser test password" },
+  });
+  await page.goto("/_/app/admin/users");
+  await expect(page.locator("#rows tr")).not.toHaveCount(0);
+  await page.route("**/_/api/v1/users?*", (route) =>
+    route.fulfill({ status: 503 }),
+  );
+  let creations = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/_/api/v1/users"))
+      creations++;
+  });
+  await page.getByLabel("New username").fill("refresh-failure-account");
+  await page.getByLabel("Initial password").fill("ordinary password");
+  await page.getByRole("button", { name: "Create user" }).click();
+  await expect(page.getByRole("alert")).toContainText("User list refresh failed");
+  await expect(page.getByRole("status")).toContainText("User created");
+  await expect(page.getByLabel("New API token")).toBeVisible();
+  const token = await page.getByLabel("New API token").inputValue();
+  expect(
+    (
+      await page.request.get("/_/api/v1/me", {
+        headers: { authorization: `Bearer ${token}` },
+      })
+    ).status(),
+  ).toBe(200);
+  await page.getByRole("button", { name: "Dismiss token" }).click();
+  await page.unroute("**/_/api/v1/users?*");
+  await page.getByLabel("Search", { exact: true }).fill("refresh-failure-account");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page.locator("#rows tr")).toHaveCount(1);
+  await expect(page.getByLabel("New API token")).toBeHidden();
+  expect(creations).toBe(1);
+  await page.reload();
+  await expect(page.getByLabel("New API token")).toBeHidden();
+});
+
+test("administrator preserves Unicode passwords when creating and resetting users", async ({
+  page,
+  browser,
+}) => {
+  const headers = { "x-pagelet-csrf": "1" };
+  await page.request.post("/_/api/v1/login", {
+    headers,
+    data: { username: "admin", password: "browser test password" },
+  });
+  await page.goto("/_/app/admin/users");
+  await page.getByLabel("New username").fill("unicode-account");
+  const initial = "😀".repeat(128);
+  await page.getByLabel("Initial password").fill(initial);
+  await page.getByRole("button", { name: "Create user" }).click();
+  await expect(page.getByLabel("New API token")).toBeVisible();
+  const ordinary = await browser.newContext();
+  const login = (password) =>
+    ordinary.request.post("/_/api/v1/login", {
+      headers,
+      data: { username: "unicode-account", password },
+    });
+  expect((await login(initial)).status()).toBe(200);
+  const replacement = "🦊".repeat(100);
+  const row = page.getByRole("row").filter({ hasText: "unicode-account" });
+  await row.getByLabel("New account password").fill(replacement);
+  page.once("dialog", (dialog) => dialog.accept());
+  await row.getByRole("button", { name: "Reset password" }).click();
+  await expect(page.getByRole("status")).toContainText("Password reset");
+  expect((await login(replacement)).status()).toBe(200);
+  await ordinary.close();
+});
+
 test("administrator creates users, transfers protected pages and resets credentials once", async ({
   page,
 }) => {

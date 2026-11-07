@@ -285,14 +285,7 @@ pub(crate) async fn list(
     } else {
         Some(account.id)
     };
-    let page = query.page.unwrap_or(1);
-    let per_page = query.per_page.unwrap_or(20).min(100);
-    let offset = page
-        .checked_sub(1)
-        .and_then(|p| p.checked_mul(per_page))
-        .and_then(|o| i64::try_from(o).ok())
-        .filter(|_| per_page != 0)
-        .ok_or(StatusCode::BAD_REQUEST)?;
+    let (page, per_page, offset) = crate::pagination(query.page, query.per_page)?;
     let db = state
         .db
         .lock()

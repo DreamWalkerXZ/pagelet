@@ -75,8 +75,6 @@ async function load() {
       const password = document.createElement("input");
       password.type = "password";
       password.autocomplete = "new-password";
-      password.minLength = 12;
-      password.maxLength = 128;
       label.append(password);
       actions.append(label);
       button(actions, "Reset password", async () => {
@@ -188,9 +186,11 @@ $("create-form").addEventListener("submit", async (event) => {
       },
     });
     $("initial-password").value = "";
-    await load();
     reveal(result);
     $("status").textContent = "User created. Username and role are fixed.";
+    await load().catch(() => {
+      $("error").textContent = "User list refresh failed. Use Search to try again.";
+    });
   } catch (reason) {
     failure(reason);
   } finally {

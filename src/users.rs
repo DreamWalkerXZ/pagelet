@@ -98,16 +98,7 @@ pub(crate) async fn list(
 ) -> Result<Json<UserList>, StatusCode> {
     require_administrator(&state, &headers)?;
     let Query(query) = query.map_err(|_| StatusCode::BAD_REQUEST)?;
-    let page = query.page.unwrap_or(1);
-    let per_page = query.per_page.unwrap_or(20).min(100);
-    let offset = page
-        .checked_sub(1)
-        .and_then(|page| page.checked_mul(per_page))
-        .and_then(|offset| i64::try_from(offset).ok())
-        .ok_or(StatusCode::BAD_REQUEST)?;
-    if per_page == 0 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
+    let (page, per_page, offset) = crate::pagination(query.page, query.per_page)?;
     let search = query.search.unwrap_or_default();
     let db = state
         .db
