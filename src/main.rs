@@ -60,7 +60,10 @@ fn init_logging() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(configured.unwrap_or_else(|_| EnvFilter::new(DEFAULT_FILTER)))
         .with_writer(io::stderr)
-        .with_ansi(false)
+        .with_ansi(
+            io::stderr().is_terminal()
+                && std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty()),
+        )
         .try_init()
         .map_err(anyhow::Error::msg)?;
     if invalid {

@@ -76,6 +76,10 @@ To restore, stop Pagelet again, move the current data directory aside, and copy 
 `pagelet=info` when `RUST_LOG` is unset or empty. An invalid filter logs a
 warning and uses that default.
 
+Logs use ANSI colors when stderr is attached to a terminal. Redirected
+output stays plain text. Set `NO_COLOR` to any nonempty value to disable
+colors in a terminal.
+
 ```sh
 RUST_LOG=pagelet=warn pagelet serve
 RUST_LOG=pagelet=debug pagelet serve
