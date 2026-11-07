@@ -10,7 +10,7 @@
     <script type="module" src="/_/assets/app.js"></script>
   </head>
   <body>
-    <a class="skip" href="#content">Skip to content</a>
+    <a class="skip" href="#content">Skip To Content</a>
     <header>
       <span class="brand">Pagelet<span class="dot">.</span></span>
       <nav aria-label="Management" hidden></nav>
@@ -18,7 +18,7 @@
     <main id="content">
       <p id="status" role="status">Loading…</p>
       <section id="login" hidden aria-labelledby="login-title">
-        <h1 id="login-title">Welcome back.</h1>
+        <h1 id="login-title">Welcome Back.</h1>
         <p>Log in to publish and manage your pages.</p>
         <form id="login-form">
           <label for="username">Username</label
@@ -30,11 +30,11 @@
             autocomplete="current-password"
             required
           />
-          <button>Log in</button>
+          <button>Log In</button>
         </form>
       </section>
       <section id="editor" hidden aria-labelledby="editor-title">
-        <h1 id="editor-title">New page</h1>
+        <h1 id="editor-title">New Page</h1>
         <form id="editor-form">
           <div class="fields">
             <div>
@@ -47,20 +47,20 @@
                 >Leave empty when publishing for a generated address.</small
               >
               <div class="actions">
-                <button id="save">Publish page</button>
-                <a id="read" class="button" hidden>Read page</a>
-                <button id="copy-link" type="button" hidden>Copy link</button>
+                <button id="save">Publish Page</button>
+                <a id="read" class="button" hidden>Visit Page</a>
+                <button id="copy-link" type="button" hidden>Copy Link</button>
                 <button id="reload" type="button" hidden>
-                  Reload server version
+                  Reload Server Version
                 </button>
               </div>
             </div>
             <div>
               <label for="password-action">Password action</label
               ><select id="password-action">
-                <option value="keep">Keep existing password</option>
-                <option value="replace">Set a new password</option>
-                <option value="remove">Remove password</option></select
+                <option value="keep">Keep Existing Password</option>
+                <option value="replace">Set A New Password</option>
+                <option value="remove">Remove Password</option></select
               ><label for="access-password">Access password</label
               ><input
                 id="access-password"
@@ -78,30 +78,30 @@
               ><textarea id="markdown" spellcheck="false"></textarea>
             </div>
             <section aria-labelledby="preview-title">
-              <h2 id="preview-title">Live preview</h2>
-              <article id="preview" aria-label="Page preview"></article>
+              <h2 id="preview-title">Live Preview</h2>
+              <article id="preview" aria-label="Page Preview"></article>
             </section>
           </div>
         </form>
         <section id="danger" hidden>
-          <h2>Delete page</h2>
+          <h2>Delete Page</h2>
           <p>
             Deletion is permanent. The page cannot be restored and its slug
             becomes available immediately.
           </p>
-          <button id="delete" type="button">Delete permanently</button>
+          <button id="delete" type="button">Delete Permanently</button>
         </section>
         <section id="transfer" hidden>
-          <h2>Transfer ownership</h2>
+          <h2>Transfer Ownership</h2>
           <form id="transfer-form">
             <label for="new-owner">New owner ID</label>
             <input id="new-owner" type="number" min="1" required />
-            <button>Transfer ownership</button>
+            <button>Transfer Ownership</button>
           </form>
         </section>
       </section>
       <noscript>This application requires JavaScript.</noscript>
     </main>
-    <footer>Publish something worth sharing.</footer>
+    <footer>Small Pages. Simply Shared.</footer>
   </body>
 </html>

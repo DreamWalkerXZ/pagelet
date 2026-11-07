@@ -20,10 +20,10 @@ test("created user's one-time token survives a failed list refresh", async ({
   });
   await page.getByLabel("New username").fill("refresh-failure-account");
   await page.getByLabel("Initial password").fill("ordinary password");
-  await page.getByRole("button", { name: "Create user" }).click();
+  await page.getByRole("button", { name: "Create User" }).click();
   await expect(page.getByRole("dialog")).toContainText("User created");
-  await expect(page.getByLabel("New API token")).toBeVisible();
-  const token = await page.getByLabel("New API token").inputValue();
+  await expect(page.getByLabel("New API Token")).toBeVisible();
+  const token = await page.getByLabel("New API Token").inputValue();
   expect(
     (
       await page.request.get("/_/api/v1/me", {
@@ -31,16 +31,16 @@ test("created user's one-time token survives a failed list refresh", async ({
       })
     ).status(),
   ).toBe(200);
-  await page.getByRole("button", { name: "Dismiss token" }).click();
+  await page.getByRole("button", { name: "Dismiss Token" }).click();
   await expect(page.getByRole("alert")).toContainText("User list refresh failed");
   await page.unroute("**/_/api/v1/users?*");
   await page.getByLabel("Search", { exact: true }).fill("refresh-failure-account");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.locator("#rows tr")).toHaveCount(1);
-  await expect(page.getByLabel("New API token")).toBeHidden();
+  await expect(page.getByLabel("New API Token")).toBeHidden();
   expect(creations).toBe(1);
   await page.reload();
-  await expect(page.getByLabel("New API token")).toBeHidden();
+  await expect(page.getByLabel("New API Token")).toBeHidden();
 });
 
 test("administrator preserves Unicode passwords when creating and resetting users", async ({
@@ -56,8 +56,8 @@ test("administrator preserves Unicode passwords when creating and resetting user
   await page.getByLabel("New username").fill("unicode-account");
   const initial = "😀".repeat(128);
   await page.getByLabel("Initial password").fill(initial);
-  await page.getByRole("button", { name: "Create user" }).click();
-  await expect(page.getByLabel("New API token")).toBeVisible();
+  await page.getByRole("button", { name: "Create User" }).click();
+  await expect(page.getByLabel("New API Token")).toBeVisible();
   const ordinary = await browser.newContext();
   const login = (password) =>
     ordinary.request.post("/_/api/v1/login", {
@@ -65,12 +65,12 @@ test("administrator preserves Unicode passwords when creating and resetting user
       data: { username: "unicode-account", password },
     });
   expect((await login(initial)).status()).toBe(200);
-  await page.getByRole("button", { name: "Dismiss token" }).click();
+  await page.getByRole("button", { name: "Dismiss Token" }).click();
   const replacement = "🦊".repeat(100);
   const row = page.getByRole("row").filter({ hasText: "unicode-account" });
   await row.getByLabel("New account password").fill(replacement);
   page.once("dialog", (dialog) => dialog.accept());
-  await row.getByRole("button", { name: "Reset password" }).click();
+  await row.getByRole("button", { name: "Reset Password" }).click();
   await expect(page.getByRole("dialog")).toContainText("Password reset");
   expect((await login(replacement)).status()).toBe(200);
   await ordinary.close();
@@ -87,16 +87,16 @@ test("administrator creates users, transfers protected pages and resets credenti
   await page.goto("/_/app/admin/users");
   await page.getByLabel("New username").fill("admin-workflow");
   await page.getByLabel("Initial password").fill("ordinary password");
-  await page.getByRole("button", { name: "Create user" }).click();
-  await expect(page.getByLabel("New API token")).toBeVisible();
-  const originalToken = await page.getByLabel("New API token").inputValue();
+  await page.getByRole("button", { name: "Create User" }).click();
+  await expect(page.getByLabel("New API Token")).toBeVisible();
+  const originalToken = await page.getByLabel("New API Token").inputValue();
   const row = page.getByRole("row").filter({ hasText: "admin-workflow" });
   const { users } = await (
     await page.request.get("/_/api/v1/users?search=admin-workflow")
   ).json();
   const userId = String(users[0].id);
-  await page.getByRole("button", { name: "Dismiss token" }).click();
-  await expect(page.getByLabel("New API token")).toBeHidden();
+  await page.getByRole("button", { name: "Dismiss Token" }).click();
+  await expect(page.getByLabel("New API Token")).toBeHidden();
   const created = await page.request.post("/_/api/v1/pages", {
     headers,
     data: {
@@ -112,14 +112,14 @@ test("administrator creates users, transfers protected pages and resets credenti
   await pageRow.getByRole("link", { name: /Edit/ }).click();
   await page.getByLabel("New owner ID").fill(userId);
   page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Transfer ownership" }).click();
+  await page.getByRole("button", { name: "Transfer Ownership" }).click();
   await expect(page.getByRole("status")).toContainText("Ownership transferred");
   await page.goto("/_/app/admin/users");
   page.once("dialog", (dialog) => dialog.accept());
-  await row.getByRole("button", { name: "Delete user" }).click();
+  await row.getByRole("button", { name: "Delete User" }).click();
   await expect(page.getByRole("alert")).toContainText("Transfer or delete");
-  await row.getByRole("button", { name: "Reset API token" }).click();
-  await expect(page.getByLabel("New API token")).toBeVisible();
+  await row.getByRole("button", { name: "Reset API Token" }).click();
+  await expect(page.getByLabel("New API Token")).toBeVisible();
   expect(
     (
       await page.request.get("/_/api/v1/me", {
@@ -128,7 +128,7 @@ test("administrator creates users, transfers protected pages and resets credenti
     ).status(),
   ).toBe(401);
   await page.reload();
-  await expect(page.getByLabel("New API token")).toBeHidden();
+  await expect(page.getByLabel("New API Token")).toBeHidden();
   const current = await (
     await page.request.get(`/_/api/v1/pages/${record.id}`)
   ).json();
@@ -137,7 +137,7 @@ test("administrator creates users, transfers protected pages and resets credenti
     data: { version: current.version },
   });
   page.once("dialog", (dialog) => dialog.accept());
-  await row.getByRole("button", { name: "Delete user" }).click();
+  await row.getByRole("button", { name: "Delete User" }).click();
   await expect(row).toHaveCount(0);
 });
 
@@ -189,15 +189,15 @@ test("transfer rejects stale versions, revokes old access and ordinary users can
   });
   await page.getByLabel("New owner ID").fill("1");
   page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Transfer ownership" }).click();
+  await page.getByRole("button", { name: "Transfer Ownership" }).click();
   await expect(page.getByRole("alert")).toContainText("Conflict");
   page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Reload server version" }).click();
+  await page.getByRole("button", { name: "Reload Server Version" }).click();
   await expect(page.getByLabel("Markdown")).toHaveValue("# Updated elsewhere");
   await page.getByLabel("Markdown").fill("# Unsaved after transfer");
   await page.getByLabel("New owner ID").fill("1");
   page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Transfer ownership" }).click();
+  await page.getByRole("button", { name: "Transfer Ownership" }).click();
   await expect(page.getByLabel("Markdown")).toHaveValue("# Unsaved after transfer");
   await expect(page.getByRole("status")).toContainText("Ownership transferred");
   expect(
@@ -230,7 +230,7 @@ test("transfer rejects stale versions, revokes old access and ordinary users can
     "Administrator access is required",
   );
   await expect(
-    ordinaryPage.getByRole("button", { name: "Create user" }),
+    ordinaryPage.getByRole("button", { name: "Create User" }),
   ).toBeHidden();
   for (const path of [
     "/users",
@@ -274,9 +274,9 @@ test("password reset rotates token and revokes sessions; final administrator can
   const row = page.getByRole("row").filter({ hasText: user.username });
   await row.getByLabel("New account password").fill("replacement password");
   page.once("dialog", (dialog) => dialog.accept());
-  await row.getByRole("button", { name: "Reset password" }).click();
-  await expect(page.getByLabel("New API token")).toBeVisible();
-  const replacement = await page.getByLabel("New API token").inputValue();
+  await row.getByRole("button", { name: "Reset Password" }).click();
+  await expect(page.getByLabel("New API Token")).toBeVisible();
+  const replacement = await page.getByLabel("New API Token").inputValue();
   expect((await ordinary.request.get("/_/api/v1/me")).status()).toBe(401);
   expect(
     (
@@ -293,12 +293,12 @@ test("password reset rotates token and revokes sessions; final administrator can
     ).status(),
   ).toBe(200);
   await page.reload();
-  await expect(page.getByLabel("New API token")).toBeHidden();
+  await expect(page.getByLabel("New API Token")).toBeHidden();
   const admin = page
     .getByRole("row")
     .filter({ has: page.getByRole("cell", { name: "admin", exact: true }) });
   page.once("dialog", (dialog) => dialog.accept());
-  await admin.getByRole("button", { name: "Delete user" }).click();
+  await admin.getByRole("button", { name: "Delete User" }).click();
   await expect(page.getByRole("alert")).toContainText("final administrator");
   expect(
     await page.evaluate(() => [

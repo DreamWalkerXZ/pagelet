@@ -48,8 +48,8 @@ function fill(page) {
   byId("password-action").hidden = false;
   document.querySelector('label[for="password-action"]').hidden = false;
   byId("access-password").disabled = true;
-  byId("editor-title").textContent = "Edit page";
-  byId("save").textContent = "Save changes";
+  byId("editor-title").textContent = "Edit Page";
+  byId("save").textContent = "Save Changes";
   byId("danger").hidden = false;
   byId("read").hidden = false;
   byId("copy-link").hidden = false;

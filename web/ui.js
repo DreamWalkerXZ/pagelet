@@ -1,8 +1,8 @@
 const links = [
-  ["/_/app/new", "New page"],
-  ["/_/app/pages", "My pages"],
+  ["/_/app/new", "New Page"],
+  ["/_/app/pages", "My Pages"],
   ["/_/app/account", "Account"],
-  ["/_/app/admin/pages", "All pages"],
+  ["/_/app/admin/pages", "All Pages"],
   ["/_/app/admin/users", "Users"],
 ];
 
@@ -34,6 +34,14 @@ export function notify(message, error = false) {
   if (!error) setTimeout(() => popup.remove(), 4500);
 }
 
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || event.defaultPrevented || document.querySelector("dialog[open]")) return;
+  const popup = document.querySelector(".popup-stack .popup");
+  if (!popup) return;
+  event.preventDefault();
+  popup.remove();
+});
+
 export async function copy(value) {
   try {
     await navigator.clipboard.writeText(value);
@@ -45,21 +53,21 @@ export async function copy(value) {
 
 export function showToken(token, message, afterClose) {
   const dialog = document.createElement("dialog");
-  dialog.setAttribute("aria-label", "Save your API token");
+  dialog.setAttribute("aria-label", "Save Your API Token");
   const label = document.createElement("label");
-  label.textContent = "New API token";
+  label.textContent = "New API Token";
   const input = Object.assign(document.createElement("input"), { readOnly: true, value: token });
   label.append(input);
   const description = Object.assign(document.createElement("p"), { textContent: message });
-  const copyButton = Object.assign(document.createElement("button"), { textContent: "Copy token" });
-  const dismiss = Object.assign(document.createElement("button"), { textContent: "Dismiss token" });
+  const copyButton = Object.assign(document.createElement("button"), { textContent: "Copy Token" });
+  const dismiss = Object.assign(document.createElement("button"), { textContent: "Dismiss Token" });
   copyButton.onclick = async () => {
     try {
       await navigator.clipboard.writeText(input.value);
       copyButton.textContent = "Copied";
     } catch {
       input.select();
-      copyButton.textContent = "Copy token manually";
+      copyButton.textContent = "Copy Token Manually";
     }
   };
   dismiss.onclick = () => dialog.close();

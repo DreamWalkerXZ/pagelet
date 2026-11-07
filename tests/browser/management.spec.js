@@ -7,12 +7,12 @@ test("home and protected management views lead to My pages after login", async (
   await expect(page).toHaveURL(/\/_\/app\/login$/);
   await page.getByLabel("Username", { exact: true }).fill("admin");
   await page.getByLabel("Account password").fill("browser test password");
-  await page.getByRole("button", { name: "Log in" }).click();
+  await page.getByRole("button", { name: "Log In" }).click();
   await expect(page).toHaveURL(/\/_\/app\/pages$/);
   const nav = page.getByRole("navigation", { name: "Management" });
   for (const path of ["pages", "new", "account", "admin/pages", "admin/users"]) {
     await page.goto("/_/app/" + path);
-    await expect(nav.getByRole("link")).toHaveText(["New page", "My pages", "Account", "All pages", "Users"]);
+    await expect(nav.getByRole("link")).toHaveText(["New Page", "My Pages", "Account", "All Pages", "Users"]);
   }
 });
 
@@ -25,7 +25,7 @@ test("new and edit previews have bounded equal panes with desktop source-block s
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/_/app/new");
   const source = page.getByLabel("Markdown");
-  const preview = page.getByLabel("Page preview");
+  const preview = page.getByLabel("Page Preview");
   const markdown = Array.from({ length: 30 }, (_, i) =>
     "# Section " + i + "\n\n| Column | Data |\n| --- | --- |\n| Value | More |",
   ).join("\n\n");
@@ -34,9 +34,9 @@ test("new and edit previews have bounded equal panes with desktop source-block s
   for (const route of ["new", "edit"]) {
     if (route === "edit") {
       await page.getByLabel("Slug", { exact: true }).fill("scroll-preview");
-      await page.getByRole("button", { name: "Publish page" }).click();
+      await page.getByRole("button", { name: "Publish Page" }).click();
       await expect(page).toHaveURL(/\/edit$/);
-      await page.getByRole("button", { name: "Copy link" }).click();
+      await page.getByRole("button", { name: "Copy Link" }).click();
       expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(new URL("/scroll-preview", page.url()).href);
     }
     await expect(page.getByText("Publishing is immediate.", { exact: false })).toHaveCount(0);
@@ -78,7 +78,7 @@ test("typing inside a tall source block keeps its short rendered block visible",
   await source.fill(link + "\n\n" + Array.from({ length: 40 }, (_, i) => "# Heading " + i).join("\n\n"));
   await source.evaluate((el, offset) => el.setSelectionRange(offset, offset), link.length - 1);
   await source.press("x");
-  const preview = page.getByLabel("Page preview");
+  const preview = page.getByLabel("Page Preview");
   await expect.poll(async () => {
     const block = await preview.getByRole("link", { name: "link" }).boundingBox();
     const pane = await preview.boundingBox();

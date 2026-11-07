@@ -25,7 +25,7 @@ test("personal lists isolate owners, search and paginate; credentials transition
   await page.goto("/_/app/login");
   await page.getByLabel("Username").fill("account-owner");
   await page.getByLabel("Account password").fill("original password");
-  await page.getByRole("button", { name: "Log in", exact: true }).click();
+  await page.getByRole("button", { name: "Log In", exact: true }).click();
   await expect(page).toHaveURL(/\/_\/app\/pages$/);
   for (let i = 0; i < 21; i++) {
     expect(
@@ -67,26 +67,26 @@ test("personal lists isolate owners, search and paginate; credentials transition
   ).toBeDisabled();
   await page.getByRole("link", { name: "Account", exact: true }).click();
   await page
-    .getByRole("button", { name: "Reset API token", exact: true })
+    .getByRole("button", { name: "Reset API Token", exact: true })
     .click();
-  await expect(page.getByLabel("New API token", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("New API Token", { exact: true })).toBeVisible();
   const token = await page
-    .getByLabel("New API token", { exact: true })
+    .getByLabel("New API Token", { exact: true })
     .inputValue();
   expect(token.length).toBeGreaterThan(20);
   expect((await page.request.get("/_/api/v1/me")).status()).toBe(200);
   await page.reload();
-  await expect(page.getByLabel("New API token", { exact: true })).toBeHidden();
+  await expect(page.getByLabel("New API Token", { exact: true })).toBeHidden();
   await page.getByLabel("Current password").fill("original password");
   await page
     .getByLabel("New password", { exact: true })
     .fill("replacement password");
   await page
-    .getByRole("button", { name: "Change password", exact: true })
+    .getByRole("button", { name: "Change Password", exact: true })
     .click();
-  await expect(page.getByLabel("New API token", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("New API Token", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Dismiss token", exact: true }),
+    page.getByRole("button", { name: "Dismiss Token", exact: true }),
   ).toBeVisible();
   expect((await page.request.get("/_/api/v1/me")).status()).toBe(401);
   expect((await otherSession.request.get(accountURL)).status()).toBe(401);
@@ -103,13 +103,13 @@ test("personal lists isolate owners, search and paginate; credentials transition
   expect(
     await page.evaluate(() => [localStorage.length, sessionStorage.length]),
   ).toEqual([0, 0]);
-  await page.getByRole("button", { name: "Dismiss token", exact: true }).click();
+  await page.getByRole("button", { name: "Dismiss Token", exact: true }).click();
   await page.getByLabel("Username").fill("account-owner");
   await page.getByLabel("Account password").fill("replacement password");
-  await page.getByRole("button", { name: "Log in", exact: true }).click();
+  await page.getByRole("button", { name: "Log In", exact: true }).click();
   await expect(page).toHaveURL(/\/_\/app\/pages$/);
   await page.goto("/_/app/account");
-  await page.getByRole("button", { name: "Log out", exact: true }).click();
+  await page.getByRole("button", { name: "Log Out", exact: true }).click();
   await expect(page).toHaveURL(/\/_\/app\/login$/);
   expect((await page.request.get("/_/api/v1/me")).status()).toBe(401);
 });
@@ -143,7 +143,7 @@ test("administrators see only their own pages in My pages", async ({
   await page.goto("/_/app/login");
   await page.getByLabel("Username").fill("admin");
   await page.getByLabel("Account password").fill("browser test password");
-  await page.getByRole("button", { name: "Log in", exact: true }).click();
+  await page.getByRole("button", { name: "Log In", exact: true }).click();
   await expect(page).toHaveURL(/\/_\/app\/pages$/);
   await page.goto("/_/app/pages");
   await expect(
@@ -153,7 +153,7 @@ test("administrators see only their own pages in My pages", async ({
     page.getByRole("link", { name: "other-private-page", exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("link", { name: "All pages", exact: true }),
+    page.getByRole("link", { name: "All Pages", exact: true }),
   ).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(

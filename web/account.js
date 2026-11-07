@@ -26,18 +26,18 @@ async function pages() {
   byId("next").disabled = page * result.per_page >= result.total;
 }
 function listView() {
-  document.title = "Pagelet · My pages";
+  document.title = "Pagelet · My Pages";
   byId("view").innerHTML =
-    `<h1>My pages</h1>
+    `<h1>My Pages</h1>
       <p>Find your published pages by slug.</p>
+      <p id="list-loading" hidden>Loading pages…</p>
+      <p id="empty" hidden>No pages found. <a href="/_/app/new">Publish A New Page</a>.</p>
       <form id="search-form">
         <label for="search">Search slugs</label>
         <div class="search-controls"><input id="search" type="search" /><button>Search</button></div>
       </form>
-      <p id="list-loading" hidden>Loading pages…</p>
-      <p id="empty" hidden>No pages found. <a href="/_/app/new">Publish a new page</a>.</p>
       <div class="table-scroll"><table class="pages-table">
-        <thead><tr><th scope="col">Slug</th><th scope="col">Actions</th><th scope="col">Last modified</th></tr></thead>
+        <thead><tr><th scope="col">Slug</th><th scope="col">Actions</th><th scope="col">Last Modified</th></tr></thead>
         <tbody id="rows"></tbody>
       </table></div>
       <div class="actions"><button id="previous" type="button">Previous</button><span id="pagination"></span><button id="next" type="button">Next</button></div>`;
@@ -73,7 +73,7 @@ async function loadPages() {
 }
 function accountView() {
   byId("view").innerHTML =
-    `<h1>Account</h1><p id="identity"></p><section><h2>Change password</h2><p>Changing your password signs out every web session and replaces your API token.</p><form id="password-form"><label for="current-password">Current password</label><input id="current-password" type="password" autocomplete="current-password" required /><label for="new-password">New password</label><input id="new-password" type="password" autocomplete="new-password" required aria-describedby="password-help" /><small id="password-help">Use 12–128 characters. Spaces and Unicode are preserved.</small><button>Change password</button></form></section><section><h2>API token</h2><p>Resetting immediately invalidates your previous token. Your web session stays signed in.</p><button id="reset-token" type="button">Reset API token</button></section><section><h2>Web session</h2><button id="logout" type="button">Log out</button></section>`;
+    `<h1>Account</h1><p id="identity"></p><section><h2>Change Password</h2><p>Changing your password signs out every web session and replaces your API token.</p><form id="password-form"><label for="current-password">Current password</label><input id="current-password" type="password" autocomplete="current-password" required /><label for="new-password">New password</label><input id="new-password" type="password" autocomplete="new-password" required aria-describedby="password-help" /><small id="password-help">Use 12–128 characters. Spaces and Unicode are preserved.</small><button>Change Password</button></form></section><section><h2>API Token</h2><p>Resetting immediately invalidates your previous token. Your web session stays signed in.</p><button id="reset-token" type="button">Reset API Token</button></section><section><h2>Web Session</h2><button id="logout" type="button">Log Out</button></section>`;
   byId("identity").textContent = `Signed in as ${user.username}.`;
   byId("password-form").onsubmit = async (event) => {
     event.preventDefault();

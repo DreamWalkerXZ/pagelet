@@ -12,7 +12,7 @@ nav,
 }
 #login {
   max-width: 420px;
-  margin: 35px auto;
+  margin: 0 auto;
 }
 #status:empty {
   display: none;
@@ -62,19 +62,22 @@ small {
   padding: 24px;
   overflow: auto;
 }
-#danger {
+#danger,
+#transfer {
   border-top: 1px solid var(--line);
   margin-top: 64px;
   padding-top: 16px;
 }
-#danger h2 {
+#danger h2,
+#transfer h2 {
   font-size: 1.2rem;
 }
 #danger p {
   color: var(--muted);
   font-size: 0.8rem;
 }
-#delete {
+#delete,
+#transfer button {
   background: var(--ink);
   color: var(--paper);
 }
@@ -86,6 +89,15 @@ small {
 }
 .table-scroll {
   overflow-x: auto;
+}
+#view .table-scroll {
+  margin-block: 24px;
+}
+#view .pages-table {
+  margin: 0;
+}
+#view .table-scroll + .actions button {
+  margin-top: 0;
 }
 #admin table {
   width: 100%;
@@ -203,11 +215,6 @@ small {
 }
 #admin .pages-table td:last-child {
   min-width: 0;
-}
-#transfer {
-  border-top: 1px solid var(--line);
-  margin-top: 32px;
-  padding-top: 16px;
 }
 #transfer-form {
   max-width: 320px;

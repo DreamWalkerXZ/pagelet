@@ -22,7 +22,7 @@ function cell(row, value) {
   td.textContent = value;
   return td;
 }
-function button(parent, name, action) {
+function button(parent, name, action, onError = failure) {
   const b = document.createElement("button");
   b.type = "button";
   b.textContent = name;
@@ -32,7 +32,7 @@ function button(parent, name, action) {
     try {
       await action();
     } catch (reason) {
-      failure(reason, name === "Delete user");
+      onError(reason);
     } finally {
       b.disabled = false;
     }
@@ -75,7 +75,7 @@ async function loadRows() {
     password.autocomplete = "new-password";
     label.append(password);
     actions.append(label);
-    button(actions, "Reset password", async () => {
+    button(actions, "Reset Password", async () => {
       if (
         !confirm(
           "Reset this password? All account sessions and the previous API token will be revoked.",
@@ -93,11 +93,11 @@ async function loadRows() {
         record.id === administrator.id ? () => location.replace("/_/app/login") : undefined,
       );
     });
-    button(actions, "Reset API token", async () => {
+    button(actions, "Reset API Token", async () => {
       const result = await requestJSON(`/users/${record.id}/token`, { method: "POST" });
       showToken(result.token, "API token reset. The previous token is invalid.");
     });
-    button(actions, "Delete user", async () => {
+    button(actions, "Delete User", async () => {
       if (
         !confirm(
           `Permanently delete ${record.username}? This cannot be undone.`,
@@ -107,7 +107,7 @@ async function loadRows() {
       await requestJSON(`/users/${record.id}`, { method: "DELETE" });
       await load();
       notify("User permanently deleted.");
-    });
+    }, (reason) => failure(reason, true));
 
   }
   $("list-empty").hidden = result.total !== 0;
@@ -171,11 +171,11 @@ try {
   navigation(administrator);
   if (administrator.role !== "administrator")
     throw Object.assign(new Error(), { status: 403 });
-  $("title").textContent = users ? "Users" : "All pages";
+  $("title").textContent = users ? "Users" : "All Pages";
   $("owner-filter").hidden = users;
   $("create").hidden = !users;
   $("columns").innerHTML =
-    users ? "<tr><th>ID</th><th>Username</th><th>Role</th><th>Actions</th></tr>" : "<tr><th>Slug</th><th>Actions</th><th>Last modified</th></tr>";
+    users ? "<tr><th>ID</th><th>Username</th><th>Role</th><th>Actions</th></tr>" : "<tr><th>Slug</th><th>Actions</th><th>Last Modified</th></tr>";
   $("rows").closest("table").classList.toggle("pages-table", !users);
   $("admin").hidden = false;
   await load();

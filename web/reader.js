@@ -23,7 +23,7 @@ async function read() {
     challenge.hidden = response.status !== 401;
     status.hidden = response.status === 401;
     if (response.status === 401) {
-      document.title = "Password required · Pagelet";
+      document.title = "Password Required · Pagelet";
       password.focus();
     } else if (response.ok) {
       const page = await response.json();
@@ -40,7 +40,7 @@ async function read() {
         response.status === 404
           ? "Page not found."
           : "Unable to load this page. Please try again.", true);
-      document.title = "Page unavailable · Pagelet";
+      document.title = "Page Unavailable · Pagelet";
     }
   } catch {
     status.hidden = true;

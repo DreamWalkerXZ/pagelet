@@ -68,19 +68,32 @@ test("protected reading grants raw access and returns to the challenge after rev
   const record = await created.json();
   await page.goto("/private-note");
   await expect(
-    page.getByRole("heading", { name: "A password opens this page." }),
+    page.getByRole("heading", { name: "A Password Opens This Page." }),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Raw Markdown" })).toBeHidden();
   expect(await page.locator("body").textContent()).not.toContain(
     "Confidential fern",
   );
   await page.getByLabel("Access password", { exact: true }).fill("wrong");
-  await page.getByRole("button", { name: "Open page" }).click();
+  await page.getByRole("button", { name: "Open Page" }).click();
   await expect(page.getByRole("alert")).toHaveText(
     "Incorrect password. Please try again.",
   );
+  for (const [width, height] of [[1280, 800], [390, 670]]) {
+    await page.setViewportSize({ width, height });
+    const popup = await page.locator(".popup").boundingBox();
+    expect(Math.abs(popup.x + popup.width / 2 - width / 2)).toBeLessThan(2);
+    expect(Math.abs(popup.y + popup.height / 2 - height / 2)).toBeLessThan(2);
+    const title = await page.getByRole("heading", { name: "A Password Opens This Page." }).boundingBox();
+    const header = await page.locator("header").boundingBox();
+    const gap = await page.locator("header").evaluate((el) => parseFloat(getComputedStyle(el).paddingBottom));
+    expect(Math.abs(title.y - header.y - header.height - gap)).toBeLessThan(2);
+  }
+  await page.getByLabel("Access password", { exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("alert")).toHaveCount(0);
   await page.getByLabel("Access password", { exact: true }).fill("open sesame");
-  await page.getByRole("button", { name: "Open page" }).click();
+  await page.getByRole("button", { name: "Open Page" }).click();
   await expect(
     page.getByRole("heading", { name: "Confidential fern" }),
   ).toBeVisible();
@@ -107,7 +120,7 @@ test("protected reading grants raw access and returns to the challenge after rev
   expect(changed.ok()).toBeTruthy();
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: "A password opens this page." }),
+    page.getByRole("heading", { name: "A Password Opens This Page." }),
   ).toBeVisible();
   expect((await page.request.get("/_/raw/private-note")).status()).toBe(401);
   await page.goto("/missing-page");
