@@ -40,6 +40,15 @@ function button(parent, name, action) {
   parent.append(b);
 }
 async function load() {
+  $("list-loading").hidden = false;
+  $("list-empty").hidden = true;
+  try {
+    await loadRows();
+  } finally {
+    $("list-loading").hidden = true;
+  }
+}
+async function loadRows() {
   $("rows").replaceChildren();
   const query = new URLSearchParams({
     page,
@@ -101,6 +110,8 @@ async function load() {
     });
 
   }
+  $("list-empty").hidden = result.total !== 0;
+  $("list-empty").textContent = users ? "No users found." : "No pages found.";
   $("count").textContent = `${result.total} ${users ? "users" : "pages"}`;
   $("page-number").textContent = `Page ${page}`;
   $("previous").disabled = page === 1;

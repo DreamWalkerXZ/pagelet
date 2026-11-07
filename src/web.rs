@@ -28,38 +28,21 @@ async fn app(
         .strip_prefix("pages/")
         .and_then(|p| p.strip_suffix("/edit"))
         .is_some_and(|id| !id.is_empty() && id.bytes().all(|c| c.is_ascii_digit()));
-    if path != "login"
-        && (editor
-            || matches!(
-                path.as_str(),
-                "new" | "pages" | "account" | "admin/pages" | "admin/users"
-            ))
-    {
+    let template: &'static [u8] = match path.as_str() {
+        "login" | "new" => include_bytes!("../web/app.html"),
+        "pages" | "account" => include_bytes!("../web/account.html"),
+        "admin/pages" | "admin/users" => include_bytes!("../web/admin.html"),
+        _ if editor => include_bytes!("../web/app.html"),
+        _ => return StatusCode::NOT_FOUND.into_response(),
+    };
+    if path != "login" {
         match crate::authenticated_user(&state, &headers) {
             Ok(_) => {}
             Err(StatusCode::UNAUTHORIZED) => return Redirect::to("/_/app/login").into_response(),
             Err(status) => return status.into_response(),
         }
     }
-    if matches!(path.as_str(), "pages" | "account") {
-        return content(
-            "text/html; charset=utf-8",
-            include_bytes!("../web/account.html"),
-        );
-    }
-    if matches!(path.as_str(), "admin/pages" | "admin/users") {
-        return content(
-            "text/html; charset=utf-8",
-            include_bytes!("../web/admin.html"),
-        );
-    }
-    if !matches!(path.as_str(), "login" | "new") && !editor {
-        return StatusCode::NOT_FOUND.into_response();
-    }
-    content(
-        "text/html; charset=utf-8",
-        include_bytes!("../web/app.html"),
-    )
+    content("text/html; charset=utf-8", template)
 }
 async fn reader(Path(slug): Path<String>) -> Response {
     if !crate::pages::valid_slug(&slug) {

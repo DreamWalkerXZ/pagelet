@@ -5,6 +5,9 @@ const byId = (id) => document.getElementById(id);
 let user;
 let page = 1;
 let search = "";
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) location.reload();
+});
 function failure(reason) {
   notify(reason.status === 401
     ? "Your session has ended or the current password is incorrect. Log in again if needed."
@@ -25,7 +28,19 @@ async function pages() {
 function listView() {
   document.title = "Pagelet · My pages";
   byId("view").innerHTML =
-    `<h1>My pages</h1><p>Find your published pages by slug.</p><form id="search-form"><label for="search">Search slugs</label><div class="search-controls"><input id="search" type="search" /><button>Search</button></div></form><p id="empty" hidden>No pages found. <a href="/_/app/new">Publish a new page</a>.</p><div class="table-scroll"><table class="pages-table"><thead><tr><th scope="col">Slug</th><th scope="col">Actions</th><th scope="col">Last modified</th></tr></thead><tbody id="rows"></tbody></table></div><div class="actions"><button id="previous" type="button">Previous</button><span id="pagination"></span><button id="next" type="button">Next</button></div>`;
+    `<h1>My pages</h1>
+      <p>Find your published pages by slug.</p>
+      <form id="search-form">
+        <label for="search">Search slugs</label>
+        <div class="search-controls"><input id="search" type="search" /><button>Search</button></div>
+      </form>
+      <p id="list-loading" hidden>Loading pages…</p>
+      <p id="empty" hidden>No pages found. <a href="/_/app/new">Publish a new page</a>.</p>
+      <div class="table-scroll"><table class="pages-table">
+        <thead><tr><th scope="col">Slug</th><th scope="col">Actions</th><th scope="col">Last modified</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table></div>
+      <div class="actions"><button id="previous" type="button">Previous</button><span id="pagination"></span><button id="next" type="button">Next</button></div>`;
   byId("search-form").onsubmit = async (event) => {
     event.preventDefault();
     search = byId("search").value;
@@ -45,12 +60,14 @@ function listView() {
 }
 async function loadPages() {
   byId("view").inert = true;
+  byId("list-loading").hidden = false;
   try {
     await pages();
   } catch (reason) {
     if (reason.status === 401) location.replace("/_/app/login");
     else failure(reason);
   } finally {
+    byId("list-loading").hidden = true;
     byId("view").inert = false;
   }
 }

@@ -10,6 +10,7 @@ export function attachPreview(source, preview) {
   const pending = new WeakMap();
   let blocks = [];
   let markers = [];
+  let followFrame;
 
   function scroll(pane, top) {
     const previous = pane.scrollTop;
@@ -34,9 +35,9 @@ export function attachPreview(source, preview) {
     from.addEventListener("scroll", () => {
       const expected = pending.get(from);
       pending.delete(from);
-      if (!desktop.matches || expected === from.scrollTop) return;
+      if (!desktop.matches || followFrame !== undefined || expected === from.scrollTop) return;
       const limit = from.scrollHeight - from.clientHeight;
-      const points = anchors().filter(([a, b]) => a >= 0 && b >= 0 && a <= source.scrollHeight - source.clientHeight && b <= preview.scrollHeight - preview.clientHeight);
+      const points = anchors().filter((point) => point[index] >= 0 && point[index] <= limit);
       const next = points.findIndex((point) => point[index] > from.scrollTop);
       if (next <= 0 || from.scrollTop >= limit) {
         scroll(to, from.scrollTop ? to.scrollHeight - to.clientHeight : 0);
@@ -50,6 +51,8 @@ export function attachPreview(source, preview) {
   }
 
   return function update(followCursor = false) {
+    if (followFrame !== undefined) cancelAnimationFrame(followFrame);
+    followFrame = undefined;
     preview.innerHTML = renderMarkdown(source.value, true);
     blocks = [...preview.querySelectorAll(":scope > [data-source-offset]")];
     const fragment = document.createDocumentFragment();
@@ -64,11 +67,20 @@ export function attachPreview(source, preview) {
     fragment.append(source.value.slice(offset), "\n");
     mirror.replaceChildren(fragment);
     if (followCursor && desktop.matches) {
-      const i = blocks.findLastIndex((block) => Number(block.dataset.sourceOffset) <= source.selectionStart);
-      if (i >= 0) {
+      // Wait for the textarea to scroll its caret into view before aligning the block.
+      followFrame = requestAnimationFrame(() => {
+        followFrame = undefined;
+        if (!desktop.matches) return;
+        const i = blocks.findLastIndex((block) => Number(block.dataset.sourceOffset) <= source.selectionStart);
+        if (i < 0) {
+          scroll(preview, 0);
+          return;
+        }
         const [sourceTop, previewTop] = anchors()[i + 1];
-        scroll(preview, previewTop - (sourceTop - source.scrollTop));
-      } else scroll(preview, 0);
+        const room = Math.max(0, preview.clientHeight - blocks[i].getBoundingClientRect().height);
+        const inset = Math.max(0, Math.min(sourceTop - source.scrollTop, room));
+        scroll(preview, previewTop - inset);
+      });
     }
   };
 }

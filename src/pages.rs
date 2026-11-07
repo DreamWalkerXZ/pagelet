@@ -84,6 +84,7 @@ pub(crate) async fn create(
             Ok(_) => {
                 let page = Page { id: tx.last_insert_rowid(), slug, markdown: body.markdown, owner_id: account.id, created_at: timestamp, updated_at: timestamp, version: 1, access_password_hash: password_hash };
                 tx.commit().map_err(|_|StatusCode::INTERNAL_SERVER_ERROR)?;
+                drop(db);
                 crate::log_event("INFO", format_args!("event=page_published page_id={} actor_id={}", page.id, account.id));
                 return Ok((StatusCode::CREATED, [(header::CACHE_CONTROL, "no-store")], Json(page)).into_response());
             }
@@ -214,18 +215,10 @@ pub(crate) async fn verify_password(
         .ok_or(StatusCode::NOT_FOUND)?
     };
     let now = (state.clock)();
-    state
-        .limits
-        .lock()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .check(
-            "page-password",
-            &state
-                .deployment
-                .source(peer.ok().map(|p| p.0.ip()), &headers)?,
-            &id.to_string(),
-            now,
-        )?;
+    let source = state
+        .deployment
+        .source(peer.ok().map(|p| p.0.ip()), &headers)?;
+    crate::sessions::check_rate(&state, "page-password", &source, &id.to_string(), now)?;
     let hash = hash.ok_or(StatusCode::BAD_REQUEST)?;
     if body.password.chars().count() > 128
         || !PasswordHash::new(&hash).is_ok_and(|h| {
@@ -454,6 +447,7 @@ pub(crate) async fn delete(
     tx.execute("DELETE FROM pages WHERE id = ?1", [id])
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     tx.commit().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    drop(db);
     crate::log_event(
         "INFO",
         format_args!("event=page_deleted page_id={id} actor_id={}", account.id),

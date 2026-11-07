@@ -38,10 +38,6 @@ impl RateLimiter {
             .iter()
             .any(|k| self.entries.get(k).is_some_and(|(_, n)| *n >= 10))
         {
-            crate::log_event(
-                "WARN",
-                format_args!("event={scope}_rate_limited source={source}"),
-            );
             return Err(StatusCode::TOO_MANY_REQUESTS);
         }
         for key in keys {
@@ -51,6 +47,27 @@ impl RateLimiter {
         Ok(())
     }
 }
+pub(crate) fn check_rate(
+    state: &AppState,
+    scope: &str,
+    source: &str,
+    target: &str,
+    now: i64,
+) -> Result<(), StatusCode> {
+    let result = state
+        .limits
+        .lock()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .check(scope, source, target, now);
+    if result == Err(StatusCode::TOO_MANY_REQUESTS) {
+        crate::log_event(
+            "WARN",
+            format_args!("event={scope}_rate_limited source={source}"),
+        );
+    }
+    result
+}
+
 pub(crate) async fn csrf(request: Request, next: Next) -> Result<Response, StatusCode> {
     if !matches!(
         *request.method(),
@@ -121,15 +138,11 @@ async fn login(
         crate::log_event("WARN", format_args!("event=login_failed source={source}"));
         StatusCode::UNAUTHORIZED
     };
-    state
-        .limits
-        .lock()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .check("login", &source, &body.username, now)?;
+    check_rate(&state, "login", &source, &body.username, now)?;
     if body.password.chars().count() > 128 {
         return Err(failed());
     }
-    let (id, hash) = {
+    let account = {
         let db = state
             .db
             .lock()
@@ -141,8 +154,8 @@ async fn login(
         )
         .optional()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or_else(failed)?
     };
+    let (id, hash) = account.ok_or_else(failed)?;
     if !verified(&body.password, &hash) {
         return Err(failed());
     }
@@ -152,6 +165,7 @@ async fn login(
         .lock()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let changed=db.execute("INSERT INTO sessions(token_hash,user_id,expires_at) SELECT ?1,id,?2 FROM users WHERE id=?3 AND password_hash=?4",params![token_hash(&token),now+WEEK,id,hash]).map_err(|_|StatusCode::INTERNAL_SERVER_ERROR)?;
+    drop(db);
     if changed == 0 {
         return Err(failed());
     }

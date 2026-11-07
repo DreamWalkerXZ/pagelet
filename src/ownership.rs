@@ -77,6 +77,7 @@ async fn transfer(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let page = tx.query_row("SELECT id,slug,markdown,owner_id,created_at,updated_at,version FROM pages WHERE id=?1",[id],|r|Ok(serde_json::json!({"id":r.get::<_,i64>(0)?,"slug":r.get::<_,String>(1)?,"markdown":r.get::<_,String>(2)?,"owner_id":r.get::<_,i64>(3)?,"created_at":r.get::<_,i64>(4)?,"updated_at":r.get::<_,i64>(5)?,"version":r.get::<_,i64>(6)?}))).map_err(|_|StatusCode::INTERNAL_SERVER_ERROR)?;
     tx.commit().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    drop(db);
     crate::log_event(
         "INFO",
         format_args!(
@@ -131,6 +132,7 @@ async fn delete_user(
     tx.execute("DELETE FROM users WHERE id=?1", [id])
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     tx.commit().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    drop(db);
     crate::log_event(
         "INFO",
         format_args!("event=user_deleted user_id={id} actor_id={}", actor.id),

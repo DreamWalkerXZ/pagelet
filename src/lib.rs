@@ -274,7 +274,9 @@ pub(crate) fn log_event(level: &str, event: std::fmt::Arguments<'_>) {
     let elapsed = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default();
-    eprintln!(
+    use std::io::Write;
+    let _ = writeln!(
+        std::io::stderr().lock(),
         "{}.{:03} {level} {event}",
         elapsed.as_secs(),
         elapsed.subsec_millis()

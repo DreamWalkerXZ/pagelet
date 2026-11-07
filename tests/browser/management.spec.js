@@ -65,3 +65,23 @@ test("new and edit previews have bounded equal panes with desktop source-block s
   await expect.poll(() => source.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
   expect(await preview.evaluate((el) => el.scrollTop)).toBe(previous);
 });
+
+test("typing inside a tall source block keeps its short rendered block visible", async ({ page }) => {
+  await page.request.post("/_/api/v1/login", {
+    headers: { "x-pagelet-csrf": "1" },
+    data: { username: "admin", password: "browser test password" },
+  });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/_/app/new");
+  const source = page.getByLabel("Markdown");
+  const link = "[link](https://example.com/" + "a".repeat(12000) + ")";
+  await source.fill(link + "\n\n" + Array.from({ length: 40 }, (_, i) => "# Heading " + i).join("\n\n"));
+  await source.evaluate((el, offset) => el.setSelectionRange(offset, offset), link.length - 1);
+  await source.press("x");
+  const preview = page.getByLabel("Page preview");
+  await expect.poll(async () => {
+    const block = await preview.getByRole("link", { name: "link" }).boundingBox();
+    const pane = await preview.boundingBox();
+    return block.y >= pane.y && block.y + block.height <= pane.y + pane.height;
+  }).toBe(true);
+});

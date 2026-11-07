@@ -63,6 +63,7 @@ pub(crate) async fn create(
     })?;
     let id = tx.last_insert_rowid();
     tx.commit().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    drop(db);
     crate::log_event(
         "INFO",
         format_args!("event=user_created user_id={id} actor_id={}", actor.id),
