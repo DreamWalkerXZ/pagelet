@@ -26,7 +26,7 @@ test("personal lists isolate owners, search and paginate; credentials transition
   await page.getByLabel("Username").fill("account-owner");
   await page.getByLabel("Account password").fill("original password");
   await page.getByRole("button", { name: "Log in", exact: true }).click();
-  await expect(page).toHaveURL(/\/_\/app\/new$/);
+  await expect(page).toHaveURL(/\/_\/app\/pages$/);
   for (let i = 0; i < 21; i++) {
     expect(
       (
@@ -48,19 +48,19 @@ test("personal lists isolate owners, search and paginate; credentials transition
   });
   await page.goto("/_/app/pages");
   await expect(
-    page.getByRole("link", { name: "Read personal-20", exact: true }),
+    page.getByRole("link", { name: "personal-20", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Read another-owner", exact: true }),
+    page.getByRole("link", { name: "another-owner", exact: true }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(
-    page.getByRole("link", { name: "Read personal-00", exact: true }),
+    page.getByRole("link", { name: "personal-00", exact: true }),
   ).toBeVisible();
   await page.getByLabel("Search slugs").fill("personal-14");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(
-    page.getByRole("link", { name: "Read personal-14", exact: true }),
+    page.getByRole("link", { name: "personal-14", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Next", exact: true }),
@@ -77,9 +77,6 @@ test("personal lists isolate owners, search and paginate; credentials transition
   expect((await page.request.get("/_/api/v1/me")).status()).toBe(200);
   await page.reload();
   await expect(page.getByLabel("New API token", { exact: true })).toBeHidden();
-  await expect(page.getByLabel("New API token", { exact: true })).toHaveValue(
-    "",
-  );
   await page.getByLabel("Current password").fill("original password");
   await page
     .getByLabel("New password", { exact: true })
@@ -89,7 +86,7 @@ test("personal lists isolate owners, search and paginate; credentials transition
     .click();
   await expect(page.getByLabel("New API token", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Log in again", exact: true }),
+    page.getByRole("button", { name: "Dismiss token", exact: true }),
   ).toBeVisible();
   expect((await page.request.get("/_/api/v1/me")).status()).toBe(401);
   expect((await otherSession.request.get(accountURL)).status()).toBe(401);
@@ -106,11 +103,11 @@ test("personal lists isolate owners, search and paginate; credentials transition
   expect(
     await page.evaluate(() => [localStorage.length, sessionStorage.length]),
   ).toEqual([0, 0]);
-  await page.getByRole("link", { name: "Log in again", exact: true }).click();
+  await page.getByRole("button", { name: "Dismiss token", exact: true }).click();
   await page.getByLabel("Username").fill("account-owner");
   await page.getByLabel("Account password").fill("replacement password");
   await page.getByRole("button", { name: "Log in", exact: true }).click();
-  await expect(page).toHaveURL(/\/_\/app\/new$/);
+  await expect(page).toHaveURL(/\/_\/app\/pages$/);
   await page.goto("/_/app/account");
   await page.getByRole("button", { name: "Log out", exact: true }).click();
   await expect(page).toHaveURL(/\/_\/app\/login$/);
@@ -147,13 +144,13 @@ test("administrators see only their own pages in My pages", async ({
   await page.getByLabel("Username").fill("admin");
   await page.getByLabel("Account password").fill("browser test password");
   await page.getByRole("button", { name: "Log in", exact: true }).click();
-  await expect(page).toHaveURL(/\/_\/app\/new$/);
+  await expect(page).toHaveURL(/\/_\/app\/pages$/);
   await page.goto("/_/app/pages");
   await expect(
-    page.getByRole("link", { name: "Read admin-personal-page", exact: true }),
+    page.getByRole("link", { name: "admin-personal-page", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Read other-private-page", exact: true }),
+    page.getByRole("link", { name: "other-private-page", exact: true }),
   ).toHaveCount(0);
   await expect(
     page.getByRole("link", { name: "All pages", exact: true }),
@@ -167,7 +164,7 @@ test("administrators see only their own pages in My pages", async ({
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBeTruthy();
-  await expect(page.locator("#rows small").first()).toContainText(
+  await expect(page.locator("#rows td:last-child").first()).toContainText(
     String(new Date().getFullYear()),
   );
   await page.screenshot({

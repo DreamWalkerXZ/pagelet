@@ -45,7 +45,8 @@ pub(crate) async fn create(
     let tx = db
         .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    if crate::authenticated_user_in(&tx, &headers, (state.clock)())?.role != "administrator" {
+    let actor = crate::authenticated_user_in(&tx, &headers, (state.clock)())?;
+    if actor.role != "administrator" {
         return Err(StatusCode::FORBIDDEN);
     }
     tx.execute(
@@ -62,6 +63,10 @@ pub(crate) async fn create(
     })?;
     let id = tx.last_insert_rowid();
     tx.commit().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    crate::log_event(
+        "INFO",
+        format_args!("event=user_created user_id={id} actor_id={}", actor.id),
+    );
     Ok((
         StatusCode::CREATED,
         Json(CreatedUser {

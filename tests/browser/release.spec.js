@@ -6,6 +6,8 @@ test("embedded delivery serves every web entry point and its local resources", a
   const contract = await request.get("/_/openapi.json");
   expect(contract.status()).toBe(200);
   expect((await contract.json()).openapi).toMatch(/^3\./);
+  expect((await request.get("/_/api/v1/me")).status()).toBe(401);
+  await request.post("/_/api/v1/login", { headers: { "x-pagelet-csrf": "1" }, data: { username: "admin", password: "browser test password" } });
   for (const path of [
     "/_/app/login", "/_/app/new", "/_/app/pages", "/_/app/account",
     "/_/app/admin/pages", "/_/app/admin/users", "/_/app/pages/1/edit",
@@ -24,7 +26,6 @@ test("embedded delivery serves every web entry point and its local resources", a
       expect(resource.headers()["content-type"]).toMatch(/text\/(javascript|css)/);
     }
   }
-  expect((await request.get("/_/api/v1/me")).status()).toBe(401);
   expect((await request.get("/_/raw/release-note")).status()).toBe(404);
 });
 

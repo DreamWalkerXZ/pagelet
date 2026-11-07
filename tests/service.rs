@@ -39,6 +39,7 @@ async fn initialized_account_survives_restart_and_authenticates() {
         .env("PAGELET_LISTEN", address.to_string())
         .arg("serve")
         .stdout(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .unwrap();
     let client = reqwest::Client::new();
@@ -67,8 +68,50 @@ async fn initialized_account_survives_restart_and_authenticates() {
         .json()
         .await
         .unwrap();
-    server.kill().unwrap();
-    server.wait().unwrap();
+    let login_url = format!("http://{address}/_/api/v1/login");
+    for (password, expected) in [("wrong password", 401), ("a long password", 200)] {
+        let response = client
+            .post(&login_url)
+            .header("x-pagelet-csrf", "1")
+            .json(&serde_json::json!({"username":"admin","password":password}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+    }
+    let signaled = Command::new("kill")
+        .args(["-s", "INT", &server.id().to_string()])
+        .status()
+        .unwrap();
+    assert!(signaled.success());
+    for _ in 0..100 {
+        if server.try_wait().unwrap().is_some() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    if server.try_wait().unwrap().is_none() {
+        server.kill().unwrap();
+    }
+    let stopped = server.wait_with_output().unwrap();
+    assert!(
+        stopped.status.success(),
+        "server did not shut down gracefully"
+    );
+    let logs = String::from_utf8(stopped.stderr).unwrap();
+    assert!(logs.contains(&format!("INFO event=listening address={address}")));
+    assert!(logs.contains("INFO event=login_succeeded username=admin"));
+    assert!(logs.contains("WARN event=login_failed source=127.0.0.1"));
+    assert!(logs.contains("INFO event=shutdown_requested signal=SIGINT"));
+    assert!(logs.contains("INFO event=shutdown_completed"));
+    for secret in [
+        token,
+        "a long password",
+        "wrong password",
+        "pagelet_session",
+    ] {
+        assert!(!logs.contains(secret));
+    }
     assert_eq!(status, 200);
     assert_eq!(
         body,

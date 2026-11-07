@@ -13,14 +13,10 @@
     <a class="skip" href="#content">Skip to content</a>
     <header>
       <span class="brand">Pagelet<span class="dot">.</span></span>
-      <nav aria-label="Management">
-        <a href="/_/app/pages">My pages</a><a href="/_/app/new">New page</a
-        ><a href="/_/app/account">Account</a>
-      </nav>
+      <nav aria-label="Management" hidden></nav>
     </header>
     <main id="content">
       <p id="status" role="status">Loading…</p>
-      <p id="error" role="alert"></p>
       <section id="login" hidden aria-labelledby="login-title">
         <h1 id="login-title">Welcome back.</h1>
         <p>Log in to publish and manage your pages.</p>
@@ -39,7 +35,6 @@
       </section>
       <section id="editor" hidden aria-labelledby="editor-title">
         <h1 id="editor-title">New page</h1>
-        <p>Publishing is immediate. Pages have no draft state.</p>
         <form id="editor-form">
           <div class="fields">
             <div>
@@ -51,6 +46,14 @@
               /><small id="slug-help"
                 >Leave empty when publishing for a generated address.</small
               >
+              <div class="actions">
+                <button id="save">Publish page</button>
+                <a id="read" class="button" hidden>Read page</a>
+                <button id="copy-link" type="button" hidden>Copy link</button>
+                <button id="reload" type="button" hidden>
+                  Reload server version
+                </button>
+              </div>
             </div>
             <div>
               <label for="password-action">Password action</label
@@ -79,13 +82,6 @@
               <article id="preview" aria-label="Page preview"></article>
             </section>
           </div>
-          <div class="actions">
-            <button id="save">Publish page</button>
-            <a id="read" hidden>Read page</a>
-            <button id="reload" type="button" hidden>
-              Reload server version
-            </button>
-          </div>
         </form>
         <section id="danger" hidden>
           <h2>Delete page</h2>
@@ -94,6 +90,14 @@
             becomes available immediately.
           </p>
           <button id="delete" type="button">Delete permanently</button>
+        </section>
+        <section id="transfer" hidden>
+          <h2>Transfer ownership</h2>
+          <form id="transfer-form">
+            <label for="new-owner">New owner ID</label>
+            <input id="new-owner" type="number" min="1" required />
+            <button>Transfer ownership</button>
+          </form>
         </section>
       </section>
       <noscript>This application requires JavaScript.</noscript>

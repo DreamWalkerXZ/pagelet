@@ -9,6 +9,8 @@ test("logs in, publishes and previews a page through its stable editor URL", asy
   await page.getByLabel("Username").fill("admin");
   await page.getByLabel("Account password").fill("browser test password");
   await page.getByRole("button", { name: "Log in" }).click();
+  await expect(page).toHaveURL(/\/_\/app\/pages$/);
+  await page.getByRole("link", { name: "New page", exact: true }).click();
   await page
     .getByLabel("Markdown")
     .fill("# Editor fern\n\n~~old~~\n\n- [x] Complete");
@@ -22,9 +24,9 @@ test("logs in, publishes and previews a page through its stable editor URL", asy
   await expect(page).toHaveURL(/\/_\/app\/pages\/\d+\/edit$/);
   await expect(page.getByRole("status")).toHaveText("Page published.");
   const editorURL = page.url();
-  const preview = await page.locator("#preview").innerHTML();
+  const preview = await page.locator("#preview").textContent();
   await page.getByRole("link", { name: "Read page" }).click();
-  await expect(page.locator("article")).toHaveJSProperty("innerHTML", preview);
+  await expect(page.locator("article")).toHaveText(preview);
   await page.goto(editorURL);
   await page.getByLabel("Slug", { exact: true }).fill("editor-fern-renamed");
   await page.getByLabel("Password action").selectOption("replace");
@@ -82,7 +84,8 @@ test("preserves work on validation, stale versions and revoked sessions, then de
   await page.getByLabel("Username").fill("admin");
   await page.getByLabel("Account password").fill("browser test password");
   await page.getByRole("button", { name: "Log in" }).click();
-  await expect(page).toHaveURL(/\/_\/app\/new$/);
+  await expect(page).toHaveURL(/\/_\/app\/pages$/);
+  await page.getByRole("link", { name: "New page", exact: true }).click();
   await page.getByLabel("Markdown").fill("# Original");
   await page.getByRole("button", { name: "Publish page" }).click();
   await expect(page.getByRole("status")).toHaveText("Page published.");
@@ -170,6 +173,8 @@ test("explains forbidden and deleted pages without showing an editable document"
   );
   await page.getByLabel("Account password").fill("ordinary password");
   await page.getByRole("button", { name: "Log in" }).click();
+  await expect(page).toHaveURL(/\/_\/app\/pages$/);
+  await page.goto(`/_/app/pages/${record.id}/edit`);
   await expect(page.getByRole("alert")).toContainText("do not have permission");
   await expect(page.getByLabel("Markdown")).toBeHidden();
   await page.goto("/_/app/pages/999999/edit");

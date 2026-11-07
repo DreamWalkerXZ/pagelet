@@ -84,6 +84,7 @@ pub(crate) async fn create(
             Ok(_) => {
                 let page = Page { id: tx.last_insert_rowid(), slug, markdown: body.markdown, owner_id: account.id, created_at: timestamp, updated_at: timestamp, version: 1, access_password_hash: password_hash };
                 tx.commit().map_err(|_|StatusCode::INTERNAL_SERVER_ERROR)?;
+                crate::log_event("INFO", format_args!("event=page_published page_id={} actor_id={}", page.id, account.id));
                 return Ok((StatusCode::CREATED, [(header::CACHE_CONTROL, "no-store")], Json(page)).into_response());
             }
             Err(rusqlite::Error::SqliteFailure(error, _)) if error.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE => {
@@ -453,6 +454,10 @@ pub(crate) async fn delete(
     tx.execute("DELETE FROM pages WHERE id = ?1", [id])
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     tx.commit().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    crate::log_event(
+        "INFO",
+        format_args!("event=page_deleted page_id={id} actor_id={}", account.id),
+    );
     Ok(StatusCode::NO_CONTENT)
 }
 

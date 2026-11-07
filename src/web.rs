@@ -1,14 +1,15 @@
 use crate::AppState;
 use axum::{
     Router,
-    extract::Path,
-    http::StatusCode,
-    response::{IntoResponse, Response},
+    extract::{Path, State},
+    http::{HeaderMap, StatusCode},
+    response::{IntoResponse, Redirect, Response},
     routing::get,
 };
 
 pub(crate) fn routes() -> Router<AppState> {
     Router::new()
+        .route("/", get(app_root))
         .route("/{slug}", get(reader))
         .route("/_/app", get(app_root))
         .route("/_/app/", get(app_root))
@@ -16,9 +17,30 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/_/assets/{*path}", get(asset))
 }
 async fn app_root() -> Response {
-    axum::response::Redirect::to("/_/app/new").into_response()
+    Redirect::to("/_/app/pages").into_response()
 }
-async fn app(Path(path): Path<String>) -> Response {
+async fn app(
+    State(state): State<AppState>,
+    Path(path): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let editor = path
+        .strip_prefix("pages/")
+        .and_then(|p| p.strip_suffix("/edit"))
+        .is_some_and(|id| !id.is_empty() && id.bytes().all(|c| c.is_ascii_digit()));
+    if path != "login"
+        && (editor
+            || matches!(
+                path.as_str(),
+                "new" | "pages" | "account" | "admin/pages" | "admin/users"
+            ))
+    {
+        match crate::authenticated_user(&state, &headers) {
+            Ok(_) => {}
+            Err(StatusCode::UNAUTHORIZED) => return Redirect::to("/_/app/login").into_response(),
+            Err(status) => return status.into_response(),
+        }
+    }
     if matches!(path.as_str(), "pages" | "account") {
         return content(
             "text/html; charset=utf-8",
@@ -31,10 +53,6 @@ async fn app(Path(path): Path<String>) -> Response {
             include_bytes!("../web/admin.html"),
         );
     }
-    let editor = path
-        .strip_prefix("pages/")
-        .and_then(|p| p.strip_suffix("/edit"))
-        .is_some_and(|id| !id.is_empty() && id.bytes().all(|c| c.is_ascii_digit()));
     if !matches!(path.as_str(), "login" | "new") && !editor {
         return StatusCode::NOT_FOUND.into_response();
     }
@@ -62,6 +80,14 @@ fn content(kind: &'static str, body: &'static [u8]) -> Response {
 }
 async fn asset(Path(path): Path<String>) -> Response {
     let (kind, bytes): (&str, &'static [u8]) = match path.as_str() {
+        "ui.js" => (
+            "text/javascript; charset=utf-8",
+            include_bytes!("../web/ui.js"),
+        ),
+        "editor-preview.js" => (
+            "text/javascript; charset=utf-8",
+            include_bytes!("../web/editor-preview.js"),
+        ),
         "account.js" => (
             "text/javascript; charset=utf-8",
             include_bytes!("../web/account.js"),

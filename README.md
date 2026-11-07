@@ -24,6 +24,9 @@ curl http://127.0.0.1:8080/_/openapi.json
 
 ## Browser workflows
 
+The home route opens My pages. Protected management routes redirect to login
+when there is no session, and standalone login returns to My pages.
+
 Open `http://127.0.0.1:8080/_/app/login` with the initialized administrator account. Create ordinary users or additional administrators under **Users**; give each person their initial password and save any token shown once. There is no public registration. Usernames and roles are fixed; the final administrator cannot be deleted, and a user must own no pages before deletion.
 
 Use **New page** to enter Markdown, inspect the live preview, optionally choose a slug and reading password, then publish. Empty pages publish immediately. **My pages** lists only your own pages, with slug search and pagination. Open a page to edit content, slug or password, or delete it permanently. Concurrent edits return a conflict; keep your unsaved text or explicitly reload the server version. Unsaved text lives in the current document and is lost on navigation or reload.

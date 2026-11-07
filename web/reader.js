@@ -1,5 +1,7 @@
 import { renderMarkdown } from "./renderer.js";
 
+import { notify } from "./ui.js";
+
 const slug = location.pathname.slice(1);
 const endpoint = `/_/api/v1/pages/by-slug/${encodeURIComponent(slug)}`;
 const status = document.querySelector("#status");
@@ -7,7 +9,6 @@ const article = document.querySelector("article");
 const challenge = document.querySelector("#challenge");
 const form = document.querySelector("form");
 const password = document.querySelector("#password");
-const error = document.querySelector("#password-error");
 const raw = document.querySelector("#raw");
 let loading = false;
 
@@ -34,16 +35,16 @@ async function read() {
       raw.hidden = false;
       document.title = `${article.querySelector("h1")?.textContent || slug} · Pagelet`;
     } else {
-      status.hidden = false;
-      status.textContent =
+      status.hidden = true;
+      notify(
         response.status === 404
           ? "Page not found."
-          : "Unable to load this page. Please try again.";
+          : "Unable to load this page. Please try again.", true);
       document.title = "Page unavailable · Pagelet";
     }
   } catch {
-    status.hidden = false;
-    status.textContent = "Unable to connect. Please reload to try again.";
+    status.hidden = true;
+    notify("Unable to connect. Please reload to try again.", true);
   } finally {
     loading = false;
   }
@@ -53,7 +54,6 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const button = form.querySelector("button");
   button.disabled = true;
-  error.textContent = "";
   try {
     const response = await fetch(`${endpoint}/verify-password`, {
       method: "POST",
@@ -61,16 +61,18 @@ form.addEventListener("submit", async (event) => {
       body: JSON.stringify({ password: password.value }),
     });
     password.value = "";
-    if (response.ok) await read();
-    else
-      error.textContent =
+    if (response.ok) {
+      notify("Page unlocked.");
+      await read();
+    } else
+      notify(
         response.status === 429
           ? "Too many attempts. Please try again later."
           : response.status === 401
             ? "Incorrect password. Please try again."
-            : "Unable to open this page. Please try again.";
+            : "Unable to open this page. Please try again.", true);
   } catch {
-    error.textContent = "Unable to connect. Please try again.";
+    notify("Unable to connect. Please try again.", true);
   } finally {
     button.disabled = false;
   }

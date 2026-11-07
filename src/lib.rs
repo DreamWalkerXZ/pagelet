@@ -270,18 +270,43 @@ pub fn openapi() -> serde_json::Value {
         .expect("Bundled OpenAPI must be valid JSON")
 }
 
+pub(crate) fn log_event(level: &str, event: std::fmt::Arguments<'_>) {
+    let elapsed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    eprintln!(
+        "{}.{:03} {level} {event}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
+}
+
 pub async fn serve(state: AppState, listen: &str) -> Result<()> {
     state.require_initialized()?;
     let listener = tokio::net::TcpListener::bind(listen)
         .await
         .context("Could not bind HTTP listener")?;
+    log_event(
+        "INFO",
+        format_args!("event=listening address={}", listener.local_addr()?),
+    );
     axum::serve(
         listener,
         router(state).into_make_service_with_connect_info::<std::net::SocketAddr>(),
     )
     .with_graceful_shutdown(async {
-        let _ = tokio::signal::ctrl_c().await;
+        match tokio::signal::ctrl_c().await {
+            Ok(()) => log_event(
+                "INFO",
+                format_args!("event=shutdown_requested signal=SIGINT"),
+            ),
+            Err(error) => log_event(
+                "ERROR",
+                format_args!("event=shutdown_signal_error error={error}"),
+            ),
+        }
     })
     .await?;
+    log_event("INFO", format_args!("event=shutdown_completed"));
     Ok(())
 }

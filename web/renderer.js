@@ -27,14 +27,26 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
   }
 });
 
-export function renderMarkdown(source) {
-  return DOMPurify.sanitize(markdown.parse(source), {
+export function renderMarkdown(source, mapBlocks = false) {
+  let html;
+  if (mapBlocks) {
+    let offset = 0;
+    html = markdown.lexer(source).map((token) => {
+      // Link definitions can be consumed without emitting a token.
+      const start = Math.max(offset, source.indexOf(token.raw, offset));
+      offset = start + token.raw.length;
+      const content = markdown.parser([token]);
+      return content ? `<div data-source-offset="${start}">${content}</div>` : "";
+    }).join("");
+  } else html = markdown.parse(source);
+  return DOMPurify.sanitize(html, {
     ALLOWED_TAGS: [
       "a",
       "blockquote",
       "br",
       "code",
       "del",
+      "div",
       "em",
       "h1",
       "h2",

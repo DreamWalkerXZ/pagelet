@@ -13,32 +13,12 @@
     <a class="skip" href="#content">Skip to content</a>
     <header>
       <span class="brand">Pagelet<span class="dot">.</span></span>
-      <nav aria-label="Management">
-        <a href="/_/app/pages">My pages</a> <a href="/_/app/new">New page</a>
-        <a href="/_/app/account">Account</a>
-        <a href="/_/app/admin/pages">All pages</a>
-        <a href="/_/app/admin/users">Users</a>
-      </nav>
+      <nav aria-label="Management" hidden></nav>
     </header>
     <main id="content">
       <p id="status" role="status">Loading…</p>
-      <p id="error" role="alert"></p>
       <section id="admin" hidden>
         <h1 id="title"></h1>
-        <section id="token-panel" hidden>
-          <h2>Save the new API token now</h2>
-          <p>
-            This token is shown only once. Store it securely. Tokens cannot be
-            retrieved later.
-          </p>
-          <label for="token">New API token</label
-          ><input id="token" readonly autocomplete="off" /><button
-            id="dismiss"
-            type="button"
-          >
-            Dismiss token
-          </button>
-        </section>
         <form id="search-form">
           <label for="search">Search</label
           ><input id="search" type="search" /><span id="owner-filter"

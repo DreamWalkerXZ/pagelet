@@ -14,11 +14,6 @@ nav,
   max-width: 420px;
   margin: 35px auto;
 }
-#error {
-  color: var(--ink);
-  font-weight: 600;
-}
-#error:empty,
 #status:empty {
   display: none;
 }
@@ -38,13 +33,7 @@ input:not([type="checkbox"]),
 select {
   margin-bottom: 10px;
 }
-textarea {
-  min-height: 460px;
-  resize: vertical;
-  font:
-    0.85rem/1.65 ui-monospace,
-    monospace;
-}
+
 textarea:focus-visible,
 select:focus-visible {
   outline: 2px solid var(--accent);
@@ -58,7 +47,7 @@ small {
 .fields,
 .workspace {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 32px;
   margin: 28px 0;
 }
@@ -66,14 +55,12 @@ small {
   font-size: 0.8rem;
   font-weight: 400;
   letter-spacing: normal;
-  margin: 0 0 6px;
-  line-height: 1.75;
 }
 #preview {
   border: 1px solid var(--line);
   border-radius: 5px;
   padding: 24px;
-  min-height: 460px;
+  overflow: auto;
 }
 #danger {
   border-top: 1px solid var(--line);
@@ -94,11 +81,7 @@ small {
 @media (max-width: 760px) {
   .fields,
   .workspace {
-    grid-template-columns: 1fr;
-  }
-  textarea,
-  #preview {
-    min-height: 300px;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 .table-scroll {
@@ -124,14 +107,8 @@ small {
 #create-form {
   max-width: 480px;
 }
-#token-panel {
-  padding: 20px;
-  margin-bottom: 24px;
-  border: 1px solid var(--accent);
-}
 
-#view > section,
-#secret {
+#view > section {
   border-top: 1px solid var(--line);
   margin-top: 36px;
   padding-top: 12px;
@@ -140,19 +117,7 @@ small {
 #search-form {
   max-width: 560px;
 }
-#rows {
-  list-style: none;
-  padding: 0;
-  margin-top: 28px;
-}
-#rows li {
-  border-top: 1px solid var(--line);
-  padding: 14px 0;
-  overflow-wrap: anywhere;
-}
-#secret input {
-  font-family: ui-monospace, monospace;
-}
+
 @media (max-width: 760px) {
   header {
     align-items: flex-start;
@@ -162,4 +127,99 @@ small {
     gap: 12px;
     justify-content: flex-end;
   }
+}
+
+.workspace > div {
+  position: relative;
+}
+#markdown,
+#preview {
+  box-sizing: border-box;
+  height: clamp(300px, 55vh, 580px);
+}
+#markdown,
+.source-measure {
+  font: 0.85rem/1.65 ui-monospace, monospace;
+  padding: 9px 12px;
+  tab-size: 8;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+}
+#markdown {
+  resize: none;
+}
+.source-measure {
+  box-sizing: border-box;
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+  max-height: 0;
+  overflow: hidden;
+}
+#preview > div:first-child > :first-child {
+  margin-top: 0;
+}
+.workspace label,
+.workspace h2 {
+  display: block;
+  margin: 0 0 6px;
+  line-height: 1.75;
+}
+.fields .actions {
+  gap: 8px;
+}
+.button {
+  display: inline-block;
+  font: 600 0.85rem system-ui;
+  border-radius: 5px;
+  background: var(--accent);
+  color: white;
+  padding: 12px 20px;
+  text-decoration: none;
+}
+.fields .button {
+  margin-top: 14px;
+}
+.search-controls {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.search-controls input,
+.search-controls button {
+  margin: 0;
+}
+.pages-table {
+  width: 100%;
+  text-align: left;
+}
+.pages-table th,
+.pages-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+#admin .pages-table td:last-child {
+  min-width: 0;
+}
+#transfer {
+  border-top: 1px solid var(--line);
+  margin-top: 32px;
+  padding-top: 16px;
+}
+#transfer-form {
+  max-width: 320px;
+}
+dialog {
+  width: min(460px, calc(100% - 32px));
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 24px;
+}
+dialog::backdrop {
+  background: #0008;
 }

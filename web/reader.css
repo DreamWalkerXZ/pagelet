@@ -190,10 +190,6 @@ button:disabled {
   opacity: 0.6;
   cursor: wait;
 }
-#password-error {
-  font-size: 0.8rem;
-  margin-top: 12px;
-}
 a:focus-visible,
 input:focus-visible,
 button:focus-visible {
@@ -236,4 +232,29 @@ button:focus-visible {
   h1 {
     font-size: 1.9rem;
   }
+}
+
+.popup-stack {
+  position: fixed;
+  inset: auto 16px 16px auto;
+  width: min(440px, calc(100% - 32px));
+  max-height: 70vh;
+  overflow-y: auto;
+  z-index: 2;
+}
+.popup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  margin: 8px 0 0;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 2px 12px #0003;
+}
+.popup button {
+  margin: 0;
 }

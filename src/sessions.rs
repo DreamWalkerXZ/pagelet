@@ -38,6 +38,10 @@ impl RateLimiter {
             .iter()
             .any(|k| self.entries.get(k).is_some_and(|(_, n)| *n >= 10))
         {
+            crate::log_event(
+                "WARN",
+                format_args!("event={scope}_rate_limited source={source}"),
+            );
             return Err(StatusCode::TOO_MANY_REQUESTS);
         }
         for key in keys {
@@ -110,20 +114,20 @@ async fn login(
     Json(body): Json<Login>,
 ) -> Result<(HeaderMap, Json<Value>), StatusCode> {
     let now = (state.clock)();
+    let source = state
+        .deployment
+        .source(peer.ok().map(|p| p.0.ip()), &headers)?;
+    let failed = || {
+        crate::log_event("WARN", format_args!("event=login_failed source={source}"));
+        StatusCode::UNAUTHORIZED
+    };
     state
         .limits
         .lock()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .check(
-            "login",
-            &state
-                .deployment
-                .source(peer.ok().map(|p| p.0.ip()), &headers)?,
-            &body.username,
-            now,
-        )?;
+        .check("login", &source, &body.username, now)?;
     if body.password.chars().count() > 128 {
-        return Err(StatusCode::UNAUTHORIZED);
+        return Err(failed());
     }
     let (id, hash) = {
         let db = state
@@ -137,10 +141,10 @@ async fn login(
         )
         .optional()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::UNAUTHORIZED)?
+        .ok_or_else(failed)?
     };
     if !verified(&body.password, &hash) {
-        return Err(StatusCode::UNAUTHORIZED);
+        return Err(failed());
     }
     let token = new_token();
     let db = state
@@ -149,7 +153,7 @@ async fn login(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let changed=db.execute("INSERT INTO sessions(token_hash,user_id,expires_at) SELECT ?1,id,?2 FROM users WHERE id=?3 AND password_hash=?4",params![token_hash(&token),now+WEEK,id,hash]).map_err(|_|StatusCode::INTERNAL_SERVER_ERROR)?;
     if changed == 0 {
-        return Err(StatusCode::UNAUTHORIZED);
+        return Err(failed());
     }
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -162,6 +166,10 @@ async fn login(
         .unwrap(),
     );
     headers.insert("cache-control", "no-store".parse().unwrap());
+    crate::log_event(
+        "INFO",
+        format_args!("event=login_succeeded username={}", body.username),
+    );
     Ok((headers, Json(json!({"id":id}))))
 }
 async fn logout(

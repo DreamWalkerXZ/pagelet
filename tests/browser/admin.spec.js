@@ -21,8 +21,7 @@ test("created user's one-time token survives a failed list refresh", async ({
   await page.getByLabel("New username").fill("refresh-failure-account");
   await page.getByLabel("Initial password").fill("ordinary password");
   await page.getByRole("button", { name: "Create user" }).click();
-  await expect(page.getByRole("alert")).toContainText("User list refresh failed");
-  await expect(page.getByRole("status")).toContainText("User created");
+  await expect(page.getByRole("dialog")).toContainText("User created");
   await expect(page.getByLabel("New API token")).toBeVisible();
   const token = await page.getByLabel("New API token").inputValue();
   expect(
@@ -33,6 +32,7 @@ test("created user's one-time token survives a failed list refresh", async ({
     ).status(),
   ).toBe(200);
   await page.getByRole("button", { name: "Dismiss token" }).click();
+  await expect(page.getByRole("alert")).toContainText("User list refresh failed");
   await page.unroute("**/_/api/v1/users?*");
   await page.getByLabel("Search", { exact: true }).fill("refresh-failure-account");
   await page.getByRole("button", { name: "Search", exact: true }).click();
@@ -65,12 +65,13 @@ test("administrator preserves Unicode passwords when creating and resetting user
       data: { username: "unicode-account", password },
     });
   expect((await login(initial)).status()).toBe(200);
+  await page.getByRole("button", { name: "Dismiss token" }).click();
   const replacement = "🦊".repeat(100);
   const row = page.getByRole("row").filter({ hasText: "unicode-account" });
   await row.getByLabel("New account password").fill(replacement);
   page.once("dialog", (dialog) => dialog.accept());
   await row.getByRole("button", { name: "Reset password" }).click();
-  await expect(page.getByRole("status")).toContainText("Password reset");
+  await expect(page.getByRole("dialog")).toContainText("Password reset");
   expect((await login(replacement)).status()).toBe(200);
   await ordinary.close();
 });
@@ -107,8 +108,11 @@ test("administrator creates users, transfers protected pages and resets credenti
   const record = await created.json();
   await page.goto("/_/app/admin/pages");
   const pageRow = page.getByRole("row").filter({ hasText: record.slug });
-  await pageRow.getByLabel("New owner ID").fill(userId);
-  await pageRow.getByRole("button", { name: "Transfer ownership" }).click();
+  await expect(pageRow.getByRole("link", { name: record.slug, exact: true })).toHaveAttribute("href", "/" + record.slug);
+  await pageRow.getByRole("link", { name: /Edit/ }).click();
+  await page.getByLabel("New owner ID").fill(userId);
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Transfer ownership" }).click();
   await expect(page.getByRole("status")).toContainText("Ownership transferred");
   await page.goto("/_/app/admin/users");
   page.once("dialog", (dialog) => dialog.accept());
@@ -177,18 +181,24 @@ test("transfer rejects stale versions, revokes old access and ordinary users can
   await page.goto("/_/app/admin/pages");
   await page.getByLabel("Search", { exact: true }).fill(record.slug);
   await page.getByRole("button", { name: "Search", exact: true }).click();
-  const row = page.getByRole("row").filter({ hasText: record.slug });
-  await expect(page.locator("#rows tr")).toHaveCount(1);
+  await page.getByRole("link", { name: "Edit " + record.slug }).click();
+  await expect(page.getByLabel("Markdown")).toHaveValue("# Transfer protected");
   await page.request.patch(`/_/api/v1/pages/${record.id}`, {
     headers,
     data: { version: record.version, markdown: "# Updated elsewhere" },
   });
-  await row.getByLabel("New owner ID").fill("1");
-  await row.getByRole("button", { name: "Transfer ownership" }).click();
+  await page.getByLabel("New owner ID").fill("1");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Transfer ownership" }).click();
   await expect(page.getByRole("alert")).toContainText("Conflict");
-  await page.getByRole("button", { name: "Search", exact: true }).click();
-  await row.getByLabel("New owner ID").fill("1");
-  await row.getByRole("button", { name: "Transfer ownership" }).click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Reload server version" }).click();
+  await expect(page.getByLabel("Markdown")).toHaveValue("# Updated elsewhere");
+  await page.getByLabel("Markdown").fill("# Unsaved after transfer");
+  await page.getByLabel("New owner ID").fill("1");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Transfer ownership" }).click();
+  await expect(page.getByLabel("Markdown")).toHaveValue("# Unsaved after transfer");
   await expect(page.getByRole("status")).toContainText("Ownership transferred");
   expect(
     (

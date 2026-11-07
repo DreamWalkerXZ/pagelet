@@ -1,20 +1,16 @@
 import { requestJSON } from "/_/assets/api.js";
-import { renderMarkdown } from "/_/assets/renderer.js";
+import { attachPreview } from "/_/assets/editor-preview.js";
+import { copy, navigation, notify } from "/_/assets/ui.js";
 
 const byId = (id) => document.getElementById(id);
 const match = location.pathname.match(/^\/_\/app\/pages\/(\d+)\/edit$/);
 let record;
 let dirty = false;
 let resume;
-const status = (message) => {
-  byId("status").textContent = message;
-};
-const error = (message) => {
-  byId("error").textContent = message;
-};
-const preview = () => {
-  byId("preview").innerHTML = renderMarkdown(byId("markdown").value);
-};
+let user;
+const status = notify;
+const error = (message) => notify(message, true);
+const preview = attachPreview(byId("markdown"), byId("preview"));
 
 function login(afterLogin) {
   resume = afterLogin;
@@ -23,6 +19,10 @@ function login(afterLogin) {
   byId("username").focus();
 }
 function failure(reason, retry) {
+  if (reason.status === 401 && !dirty) {
+    location.replace("/_/app/login");
+    return;
+  }
   const messages = {
     400: "Check your slug, password and Markdown. Your entered work is unchanged.",
     401: "Your session has ended. Log in below to continue; your entered work is unchanged.",
@@ -52,6 +52,8 @@ function fill(page) {
   byId("save").textContent = "Save changes";
   byId("danger").hidden = false;
   byId("read").hidden = false;
+  byId("copy-link").hidden = false;
+  byId("transfer").hidden = user.role !== "administrator";
   byId("read").href = `/${page.slug}`;
   byId("editor").hidden = false;
   byId("reload").hidden = true;
@@ -60,16 +62,17 @@ function fill(page) {
 }
 async function load() {
   try {
+    user = await requestJSON("/me");
+    navigation(user);
     if (match) fill(await requestJSON(`/pages/${match[1]}`));
     else {
-      await requestJSON("/me");
       byId("editor").hidden = false;
       byId("password-action").hidden = true;
       document.querySelector('label[for="password-action"]').hidden = true;
     }
-    status("");
+    byId("status").hidden = true;
   } catch (reason) {
-    status("");
+    byId("status").hidden = true;
     failure(reason, load);
   }
 }
@@ -86,11 +89,16 @@ byId("login-form").addEventListener("submit", async (event) => {
       },
     });
     byId("account-password").value = "";
-    byId("login").hidden = true;
-    byId("editor").inert = false;
-    error("");
-    if (location.pathname === "/_/app/login") location.replace("/_/app/new");
-    else if (resume) await resume();
+    if (location.pathname === "/_/app/login") location.replace("/_/app/pages");
+    else {
+      user = await requestJSON("/me");
+      byId("login").hidden = true;
+      byId("editor").inert = false;
+      navigation(user);
+      byId("transfer").hidden = !record || user.role !== "administrator";
+      if (resume) await resume();
+      else status("Logged in.");
+    }
   } catch (reason) {
     error(
       reason.status === 401
@@ -101,9 +109,9 @@ byId("login-form").addEventListener("submit", async (event) => {
     button.disabled = false;
   }
 });
-byId("editor-form").addEventListener("input", () => {
+byId("editor-form").addEventListener("input", (event) => {
   dirty = true;
-  preview();
+  if (event.target.id === "markdown") preview(true);
 });
 byId("password-action").addEventListener("change", () => {
   byId("access-password").disabled =
@@ -114,7 +122,7 @@ byId("editor-form").addEventListener("submit", async (event) => {
   const button = byId("save");
   button.disabled = true;
   byId("editor").inert = true;
-  error("");
+
   try {
     const body = { markdown: byId("markdown").value };
     if (record || byId("slug").value) body.slug = byId("slug").value;
@@ -149,16 +157,16 @@ byId("reload").addEventListener("click", async () => {
     return;
   try {
     fill(await requestJSON(`/pages/${record.id}`));
-    error("");
+
     status("Server version loaded.");
   } catch (reason) {
-    failure(reason, () => {});
+    failure(reason);
   }
 });
 byId("delete").addEventListener("click", async () => {
   if (!confirm("Permanently delete this page? This cannot be undone.")) return;
   byId("delete").disabled = true;
-  error("");
+
   try {
     await requestJSON(`/pages/${record.id}`, {
       method: "DELETE",
@@ -173,6 +181,25 @@ byId("delete").addEventListener("click", async () => {
     byId("delete").disabled = false;
   }
 });
+byId("copy-link").onclick = () => copy(new URL("/" + record.slug, location.origin).href);
+byId("transfer-form").onsubmit = async (event) => {
+  event.preventDefault();
+  const owner = Number(byId("new-owner").value);
+  if (!Number.isSafeInteger(owner) || owner < 1) return;
+  if (!confirm("Transfer ownership to user " + owner + "? Unsaved edits will remain in the editor.")) return;
+  byId("editor").inert = true;
+  try {
+    record = await requestJSON(`/pages/${record.id}/owner`, {
+      method: "POST", body: { version: record.version, owner_id: owner },
+    });
+    byId("transfer-form").reset();
+    status("Ownership transferred. Previous owner privileges and visitor access grants were revoked.");
+  } catch (reason) {
+    failure(reason);
+  } finally {
+    byId("editor").inert = !byId("login").hidden;
+  }
+};
 window.addEventListener("beforeunload", (event) => {
   if (dirty) {
     event.preventDefault();
@@ -180,6 +207,6 @@ window.addEventListener("beforeunload", (event) => {
   }
 });
 if (location.pathname === "/_/app/login") {
-  status("");
+  byId("status").hidden = true;
   login();
 } else await load();

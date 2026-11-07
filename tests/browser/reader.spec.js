@@ -111,7 +111,7 @@ test("protected reading grants raw access and returns to the challenge after rev
   ).toBeVisible();
   expect((await page.request.get("/_/raw/private-note")).status()).toBe(401);
   await page.goto("/missing-page");
-  await expect(page.getByRole("status")).toHaveText("Page not found.");
+  await expect(page.getByRole("alert")).toHaveText("Page not found.");
 });
 
 test("reserves service routes and rejects unknown assets without an HTML fallback", async ({
