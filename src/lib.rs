@@ -102,7 +102,7 @@ impl AppState {
         })
     }
 
-    pub fn require_initialized(&self) -> Result<()> {
+    pub fn is_initialized(&self) -> Result<bool> {
         let db = self
             .db
             .lock()
@@ -112,7 +112,11 @@ impl AppState {
             [],
             |row| row.get(0),
         )?;
-        if !exists {
+        Ok(exists)
+    }
+
+    pub fn require_initialized(&self) -> Result<()> {
+        if !self.is_initialized()? {
             bail!("Instance is not initialized; run pagelet init first");
         }
         Ok(())

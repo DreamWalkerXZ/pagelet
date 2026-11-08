@@ -2,6 +2,7 @@ use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
 use pagelet::AppState;
 use std::{
+    env,
     io::{self, IsTerminal, Write},
     path::PathBuf,
 };
@@ -72,13 +73,36 @@ fn init_logging() -> Result<()> {
     Ok(())
 }
 
+fn bootstrap_administrator(state: &AppState) -> Result<()> {
+    if state.is_initialized()? {
+        return Ok(());
+    }
+    const USERNAME: &str = "PAGELET_ADMIN_USERNAME";
+    const PASSWORD: &str = "PAGELET_ADMIN_PASSWORD";
+    let (username, password) = match (env::var_os(USERNAME), env::var_os(PASSWORD)) {
+        (None, None) => return Ok(()),
+        (None, Some(_)) => bail!("{USERNAME} is required when {PASSWORD} is set"),
+        (Some(_), None) => bail!("{PASSWORD} is required when {USERNAME} is set"),
+        (Some(username), Some(password)) => (username, password),
+    };
+    let username = username
+        .into_string()
+        .map_err(|_| anyhow::anyhow!("{USERNAME} must be valid UTF-8"))?;
+    let password = password
+        .into_string()
+        .map_err(|_| anyhow::anyhow!("{PASSWORD} must be valid UTF-8"))?;
+    state.initialize(&username, &password)?;
+    tracing::info!(event = %"administrator_initialized", source = %"environment");
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     let state = AppState::open(&cli.data_dir)?;
     match cli.command {
         Command::Init => {
-            if state.require_initialized().is_ok() {
+            if state.is_initialized()? {
                 bail!("Instance is already initialized");
             }
             let username = read_input("Username: ", false)?;
@@ -113,6 +137,7 @@ async fn main() -> Result<()> {
                 external_url.as_deref(),
                 trusted_proxy.iter().map(String::as_str),
             )?;
+            bootstrap_administrator(&state)?;
             pagelet::serve(state, &listen).await?;
         }
     }

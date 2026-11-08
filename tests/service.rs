@@ -28,12 +28,17 @@ async fn start_server(
     directory: &Path,
     client: &reqwest::Client,
     filter: Option<&str>,
+    bootstrap: &[(&str, &str)],
 ) -> (TestServer, String) {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     drop(listener);
     let mut command = Command::new(env!("CARGO_BIN_EXE_pagelet"));
-    command.env_remove("RUST_LOG");
+    command
+        .env_remove("RUST_LOG")
+        .env_remove("PAGELET_ADMIN_USERNAME")
+        .env_remove("PAGELET_ADMIN_PASSWORD")
+        .envs(bootstrap.iter().copied());
     if let Some(filter) = filter {
         command.env("RUST_LOG", filter);
     }
@@ -42,7 +47,7 @@ async fn start_server(
             .env("PAGELET_DATA_DIR", directory)
             .env("PAGELET_LISTEN", address.to_string())
             .arg("serve")
-            .stdout(Stdio::null())
+            .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .unwrap(),
@@ -84,6 +89,14 @@ async fn stop_server(mut server: TestServer) -> String {
         .unwrap()
         .read_to_string(&mut logs)
         .unwrap();
+    let mut stdout = String::new();
+    server
+        .stdout
+        .take()
+        .unwrap()
+        .read_to_string(&mut stdout)
+        .unwrap();
+    assert!(stdout.is_empty(), "serve printed to stdout");
     logs
 }
 
@@ -93,6 +106,8 @@ async fn initialized_account_survives_restart_and_authenticates() {
     let binary = env!("CARGO_BIN_EXE_pagelet");
     let refusal = Command::new(binary)
         .args(["--data-dir", directory.path().to_str().unwrap(), "serve"])
+        .env_remove("PAGELET_ADMIN_USERNAME")
+        .env_remove("PAGELET_ADMIN_PASSWORD")
         .output()
         .unwrap();
     assert!(!refusal.status.success());
@@ -115,7 +130,7 @@ async fn initialized_account_survives_restart_and_authenticates() {
         .find_map(|line| line.strip_prefix("API token: "))
         .unwrap();
     let client = reqwest::Client::new();
-    let (server, address) = start_server(directory.path(), &client, None).await;
+    let (server, address) = start_server(directory.path(), &client, None, &[]).await;
     let url = format!("http://{address}/_/api/v1/me");
     let response = client.get(&url).bearer_auth(token).send().await.unwrap();
     let status = response.status();
@@ -215,6 +230,8 @@ fn initialization_rejects_invalid_credentials_without_creating_an_account() {
         assert!(!String::from_utf8_lossy(&result.stdout).contains("API token:"));
         let result = Command::new(env!("CARGO_BIN_EXE_pagelet"))
             .args(["--data-dir", directory.path().to_str().unwrap(), "serve"])
+            .env_remove("PAGELET_ADMIN_USERNAME")
+            .env_remove("PAGELET_ADMIN_PASSWORD")
             .output()
             .unwrap();
         assert!(!result.status.success());
@@ -251,7 +268,7 @@ async fn service_filters_logs_and_only_summarizes_safe_request_fields_at_debug()
         ("pagelet=invalid-log-level-marker", true, false, true),
         ("", true, false, false),
     ] {
-        let (server, address) = start_server(directory.path(), &client, Some(filter)).await;
+        let (server, address) = start_server(directory.path(), &client, Some(filter), &[]).await;
         let base = format!("http://{address}");
         let matched = client
             .get(format!(
@@ -362,5 +379,94 @@ async fn service_filters_logs_and_only_summarizes_safe_request_fields_at_debug()
         ] {
             assert!(!logs.contains(secret), "logs included a sensitive value");
         }
+    }
+}
+
+#[test]
+fn startup_reports_missing_bootstrap_variables_without_echoing_credentials() {
+    for (present, missing) in [
+        ("PAGELET_ADMIN_USERNAME", "PAGELET_ADMIN_PASSWORD"),
+        ("PAGELET_ADMIN_PASSWORD", "PAGELET_ADMIN_USERNAME"),
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let result = Command::new(env!("CARGO_BIN_EXE_pagelet"))
+            .arg("--data-dir")
+            .arg(directory.path())
+            .arg("serve")
+            .env_remove(missing)
+            .env(present, "private-value")
+            .output()
+            .unwrap();
+        assert!(!result.status.success());
+        let logs = String::from_utf8_lossy(&result.stderr);
+        assert!(logs.contains(missing), "{logs}");
+        assert!(!logs.contains("private-value"));
+        assert!(result.stdout.is_empty());
+    }
+}
+
+#[tokio::test]
+async fn environment_bootstrap_is_private_and_only_runs_once() {
+    let directory = tempfile::tempdir().unwrap();
+    let client = reqwest::Client::new();
+    for (first_start, username, password) in [
+        (true, "bootstrap-admin", "bootstrap password"),
+        (false, "Invalid username", "short"),
+    ] {
+        let (server, address) = start_server(
+            directory.path(),
+            &client,
+            None,
+            &[
+                ("PAGELET_ADMIN_USERNAME", username),
+                ("PAGELET_ADMIN_PASSWORD", password),
+            ],
+        )
+        .await;
+        let base = format!("http://{address}");
+        let login = client
+            .post(format!("{base}/_/api/v1/login"))
+            .header("x-pagelet-csrf", "1")
+            .json(&serde_json::json!({
+                "username": "bootstrap-admin",
+                "password": "bootstrap password",
+            }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(login.status(), 200);
+        if first_start {
+            let cookie = login.headers()["set-cookie"].to_str().unwrap();
+            let page = client
+                .post(format!("{base}/_/api/v1/pages"))
+                .header("cookie", cookie.split(';').next().unwrap())
+                .header("x-pagelet-csrf", "1")
+                .json(&serde_json::json!({"slug":"bootstrap","markdown":"# Preserved"}))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(page.status(), 201);
+        }
+        let raw = client
+            .get(format!("{base}/_/raw/bootstrap"))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap();
+        assert_eq!(raw.text().await.unwrap(), "# Preserved");
+
+        let logs = stop_server(server).await;
+        let event = [
+            "INFO",
+            "event=administrator_initialized",
+            "source=environment",
+        ];
+        assert_eq!(has_event(&logs, &event), first_start);
+        for line in logs.lines().filter(|line| line.contains(event[1])) {
+            assert!(!line.contains(username));
+        }
+        assert!(!logs.contains("bootstrap password"));
+        assert!(!logs.contains("API token"));
     }
 }

@@ -4,16 +4,20 @@ A self-hosted Markdown publishing service distributed as one Rust executable wit
 
 ## Run
 
-Build with a Rust toolchain supporting edition 2024 using `cargo build --release`. SQLite and all frontend assets are bundled into the executable. Node.js and loose web files are not required to build or run the service; vendored renderer files are checked in. Copy `target/release/pagelet` to your deployment directory.
+Download the archive for Linux x86_64, Linux arm64, or macOS arm64 from [GitHub Releases](https://github.com/DreamWalkerXZ/pagelet/releases). Compute the archive's SHA-256 digest with `sha256sum <archive>` (Linux) or `shasum -a 256 <archive>` (macOS) and compare it with the corresponding entry in `SHA256SUMS`. Extract the archive and run `pagelet` from the deployment directory.
+
+To build from source, run `cargo build --locked --release` with a Rust toolchain supporting edition 2024 and copy `target/release/pagelet` to your deployment directory. SQLite and the browser assets are bundled into the executable.
 
 ```sh
-./target/release/pagelet --data-dir ./data init
-./target/release/pagelet --data-dir ./data serve
+./pagelet --data-dir ./data init
+./pagelet --data-dir ./data serve
 ```
 
 Initialization asks for a username, a password, and password confirmation. Password input is hidden on a terminal. Piped input is supported for local automation. Account passwords contain 12–128 Unicode characters, without trimming or normalization. Usernames contain 3–32 lowercase ASCII letters, digits, or single interior hyphens. Save the API token displayed once during initialization. Existing instances cannot be initialized again.
 
-The service refuses to start until initialized. HTTP defaults to `127.0.0.1:8080`. Override the data directory with `--data-dir` or `PAGELET_DATA_DIR`, and the listening address with `serve --listen` or `PAGELET_LISTEN`. CLI arguments take precedence over environment variables.
+For unattended first startup, set both `PAGELET_ADMIN_USERNAME` and `PAGELET_ADMIN_PASSWORD` in the environment of `pagelet serve`. It creates the first administrator using the same validation as `init` and logs that it initialized from the environment. Sign in and use **Account → Reset API Token** to obtain a token. With just one variable, startup reports the missing variable. With neither variable, a new instance requires `pagelet init`. An initialized instance ignores both variables and retains its credentials and pages.
+
+HTTP defaults to `127.0.0.1:8080`. Override the data directory with `--data-dir` or `PAGELET_DATA_DIR`, and the listening address with `serve --listen` or `PAGELET_LISTEN`. CLI arguments take precedence over environment variables.
 
 ```sh
 curl -H "Authorization: Bearer $PAGELET_TOKEN" http://127.0.0.1:8080/_/api/v1/me
@@ -21,6 +25,21 @@ curl http://127.0.0.1:8080/_/openapi.json
 ```
 
 `GET /_/api/v1/me` returns only the account ID, username, and role. Passwords are stored as salted Argon2id verifiers; random 256-bit API tokens are stored only as SHA-256 hashes. Keep the data directory and token private. Deploy public HTTP behind an HTTPS reverse proxy. Configure the external URL and proxy trust explicitly as described below.
+
+## Docker
+
+The [Docker Hub image](https://hub.docker.com/r/dreamwalkerxz/pagelet) supports Linux amd64 and arm64. Pin `dreamwalkerxz/pagelet:0.1.0` to this release or use `dreamwalkerxz/pagelet:latest` for the latest stable release.
+
+```sh
+docker volume create pagelet-data
+docker run --rm -it -v pagelet-data:/data dreamwalkerxz/pagelet:0.1.0 init
+docker run -d --name pagelet -p 127.0.0.1:8080:8080 \
+  -v pagelet-data:/data dreamwalkerxz/pagelet:0.1.0
+```
+
+For unattended setup, skip the interactive command and pass `-e PAGELET_ADMIN_USERNAME -e PAGELET_ADMIN_PASSWORD` to the server container with both variables exported locally. Keep the bootstrap password in your deployment's secret configuration. You can recreate the container without those variables after initialization.
+
+The image runs as UID and GID `65532`, listens on `0.0.0.0:8080` inside the container, and keeps its SQLite files in `/data`. If you bind-mount a host directory, grant that UID write access. Use `docker stop pagelet` for graceful shutdown and mount the same volume when replacing the container.
 
 ## Browser workflows
 
@@ -218,6 +237,8 @@ protection. The external URL is deployment configuration, not built-in TLS or a
 redirect service.
 
 ## Release acceptance
+
+See [Releasing Pagelet](docs/releasing.md) for the tagged build, draft review, and Docker Hub publication steps.
 
 `cargo test --test acceptance` runs the actual executable with a real temporary SQLite directory through initialization, user provisioning, publication/raw reading, password verification, token rotation, ownership transfer, and permanent account/page deletion. It stops the process, copies the entire current data directory, and runs the restored instance from the copy. Requests and observed responses are checked against the public OpenAPI operation's status, media type, and structural schemas (references, required fields, types, enums, and constants), including conflicts and rate limits. This is a focused contract regression check, not a general OpenAPI/JSON Schema conformance engine.
 
