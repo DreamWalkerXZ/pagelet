@@ -63,6 +63,7 @@ fn content(kind: &'static str, body: &'static [u8]) -> Response {
 }
 async fn asset(Path(path): Path<String>) -> Response {
     let (kind, bytes): (&str, &'static [u8]) = match path.as_str() {
+        "favicon.svg" => ("image/svg+xml", include_bytes!("../web/favicon.svg")),
         "ui.js" => (
             "text/javascript; charset=utf-8",
             include_bytes!("../web/ui.js"),

@@ -17,13 +17,19 @@ test("embedded delivery serves every web entry point and its local resources", a
     expect(response.status()).toBe(200);
     expect(response.headers()["content-type"]).toContain("text/html");
     const html = await response.text();
+    expect(html).toContain('rel="icon" type="image/svg+xml" href="/_/assets/favicon.svg"');
     const assets = [...html.matchAll(/(?:src|href)="(\/_\/assets\/[^\"]+)"/g)]
       .map((match) => match[1]);
     expect(assets.length).toBeGreaterThan(0);
     for (const asset of assets) {
       const resource = await request.get(asset);
       expect(resource.status(), asset).toBe(200);
-      expect(resource.headers()["content-type"]).toMatch(/text\/(javascript|css)/);
+      if (asset === "/_/assets/favicon.svg") {
+        expect(resource.headers()["content-type"]).toBe("image/svg+xml");
+        expect(await resource.text()).toContain('<svg xmlns="http://www.w3.org/2000/svg"');
+      } else {
+        expect(resource.headers()["content-type"]).toMatch(/text\/(javascript|css)/);
+      }
     }
   }
   expect((await request.get("/_/raw/release-note")).status()).toBe(404);
