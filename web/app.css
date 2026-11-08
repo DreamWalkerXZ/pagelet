@@ -216,7 +216,8 @@ small {
 #admin .pages-table td:last-child {
   min-width: 0;
 }
-#transfer-form {
+#transfer-form,
+#owner-search-form {
   max-width: 320px;
 }
 dialog {

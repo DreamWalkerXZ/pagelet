@@ -12,6 +12,10 @@ export async function requestJSON(path, { method = "GET", body } = {}) {
   if (!response.ok) {
     const error = new Error(`Request failed (${response.status}).`);
     error.status = response.status;
+    if (response.status === 409) {
+      const detail = await response.json().catch(() => null);
+      error.code = detail?.code;
+    }
     throw error;
   }
   return response.status === 204 ? null : response.json();

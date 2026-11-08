@@ -1,5 +1,5 @@
 import { requestJSON } from "/_/assets/api.js";
-import { navigation, notify, pageRow, showToken } from "/_/assets/ui.js";
+import { confirmAction, navigation, notify, pageRow, showToken } from "/_/assets/ui.js";
 const $ = (id) => document.getElementById(id);
 const users = location.pathname.endsWith("/users");
 let page = 1;
@@ -27,14 +27,15 @@ function button(parent, name, action, onError = failure) {
   b.type = "button";
   b.textContent = name;
   b.addEventListener("click", async () => {
-
+    const hadFocus = document.activeElement === b;
     b.disabled = true;
     try {
-      await action();
+      await action(b);
     } catch (reason) {
       onError(reason);
     } finally {
       b.disabled = false;
+      if (hadFocus && document.activeElement === document.body) b.focus();
     }
   });
   parent.append(b);
@@ -93,9 +94,13 @@ async function loadRows() {
         record.id === administrator.id ? () => location.replace("/_/app/login") : undefined,
       );
     });
-    button(actions, "Reset API Token", async () => {
+    button(actions, "Reset API Token", async (trigger) => {
+      if (!await confirmAction("Reset API Token",
+        `Reset the API token for ${record.username}? Their previous token will stop working immediately. Their web sessions will stay signed in.`,
+      )) return;
       const result = await requestJSON(`/users/${record.id}/token`, { method: "POST" });
-      showToken(result.token, "API token reset. The previous token is invalid.");
+      showToken(result.token, "API token reset. The previous token is invalid.",
+        () => trigger.focus());
     });
     button(actions, "Delete User", async () => {
       if (

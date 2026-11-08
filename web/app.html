@@ -56,11 +56,11 @@
               </div>
             </div>
             <div>
-              <label for="password-action">Password action</label
+              <label for="password-action">Access Password Action</label
               ><select id="password-action">
-                <option value="keep">Keep Existing Password</option>
-                <option value="replace">Set A New Password</option>
-                <option value="remove">Remove Password</option></select
+                <option value="keep">Keep Existing Access Password</option>
+                <option value="replace">Set a New Access Password</option>
+                <option value="remove">Remove Access Password</option></select
               ><label for="access-password">Access password</label
               ><input
                 id="access-password"
@@ -93,9 +93,23 @@
         </section>
         <section id="transfer" hidden>
           <h2>Transfer Ownership</h2>
+          <form id="owner-search-form">
+            <label for="owner-search">Search Users</label>
+            <div class="search-controls">
+              <input id="owner-search" type="search" />
+              <button>Search Users</button>
+            </div>
+            <p id="owner-results" aria-live="polite"></p>
+            <div class="actions" id="owner-pagination" hidden>
+              <button id="owner-previous" type="button">Previous</button>
+              <button id="owner-next" type="button">Next</button>
+            </div>
+          </form>
           <form id="transfer-form">
-            <label for="new-owner">New owner ID</label>
-            <input id="new-owner" type="number" min="1" required />
+            <label for="new-owner">New Owner</label>
+            <select id="new-owner" required>
+              <option value="">Select a user</option>
+            </select>
             <button>Transfer Ownership</button>
           </form>
         </section>

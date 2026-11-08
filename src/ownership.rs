@@ -1,8 +1,9 @@
-use crate::{AppState, authenticated_user_in};
+use crate::{AppState, authenticated_user_in, pages::page_conflict};
 use axum::{
     Json, Router,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
+    response::{IntoResponse, Response},
     routing::{delete, post},
 };
 use rusqlite::{OptionalExtension, TransactionBehavior, params};
@@ -20,13 +21,7 @@ async fn transfer(
     Path(id): Path<i64>,
     headers: HeaderMap,
     body: Result<Json<Transfer>, axum::extract::rejection::JsonRejection>,
-) -> Result<
-    (
-        [(axum::http::HeaderName, &'static str); 1],
-        Json<serde_json::Value>,
-    ),
-    StatusCode,
-> {
+) -> Result<Response, StatusCode> {
     let mut db = state
         .db
         .lock()
@@ -42,17 +37,20 @@ async fn transfer(
     if body.version < 1 || body.owner_id < 1 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let (version, updated_at): (i64, i64) = tx
+    let (version, updated_at, owner_id): (i64, i64, i64) = tx
         .query_row(
-            "SELECT version,updated_at FROM pages WHERE id=?1",
+            "SELECT version,updated_at,owner_id FROM pages WHERE id=?1",
             [id],
-            |r| Ok((r.get(0)?, r.get(1)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
         .optional()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
     if version != body.version {
-        return Err(StatusCode::CONFLICT);
+        return Ok(page_conflict("stale_version"));
+    }
+    if owner_id == body.owner_id {
+        return Err(StatusCode::BAD_REQUEST);
     }
     let exists: bool = tx
         .query_row(
@@ -87,7 +85,8 @@ async fn transfer(
     Ok((
         [(axum::http::header::CACHE_CONTROL, "no-store")],
         Json(page),
-    ))
+    )
+        .into_response())
 }
 
 async fn delete_user(

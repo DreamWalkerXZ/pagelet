@@ -105,6 +105,33 @@ async fn administrators_provision_accounts_with_one_time_tokens() {
             .status(),
         200
     );
+    let old_id = extra["user"]["id"].as_i64().unwrap();
+    assert_eq!(
+        client
+            .delete(format!("{url}/users/{old_id}"))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        204
+    );
+    let replacement: Value = client
+        .post(format!("{url}/users"))
+        .bearer_auth(&token)
+        .json(&json!({"username":"second-admin","password":"another password","role":"administrator"}))
+        .send().await.unwrap().json().await.unwrap();
+    assert!(replacement["user"]["id"].as_i64().unwrap() > old_id);
+    assert_eq!(
+        client
+            .post(format!("{url}/users/{old_id}/token"))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
     server.abort();
 }
 

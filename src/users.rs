@@ -49,9 +49,10 @@ pub(crate) async fn create(
     if actor.role != "administrator" {
         return Err(StatusCode::FORBIDDEN);
     }
+    let id = crate::next_user_id(&tx).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     tx.execute(
-        "INSERT INTO users (username, role, password_hash, token_hash) VALUES (?1, ?2, ?3, ?4)",
-        params![body.username, body.role, hash, token_hash(&token)],
+        "INSERT INTO users (id, username, role, password_hash, token_hash) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![id, body.username, body.role, hash, token_hash(&token)],
     )
     .map_err(|error| match error {
         rusqlite::Error::SqliteFailure(error, _)
@@ -61,7 +62,6 @@ pub(crate) async fn create(
         }
         _ => StatusCode::INTERNAL_SERVER_ERROR,
     })?;
-    let id = tx.last_insert_rowid();
     tx.commit().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     drop(db);
     tracing::info!(event = %"user_created", user_id = id, actor_id = actor.id);

@@ -50,7 +50,7 @@ Open `http://127.0.0.1:8080/_/app/login` with the initialized administrator acco
 
 Use **New page** to enter Markdown, inspect the live preview, optionally choose a slug and reading password, then publish. Empty pages publish immediately. **My pages** lists only your own pages, with slug search and pagination. Open a page to edit content, slug or password, or delete it permanently. Concurrent edits return a conflict; keep your unsaved text or explicitly reload the server version. Unsaved text lives in the current document and is lost on navigation or reload.
 
-**Account** changes your password or resets your API token. Copy a newly issued token before leaving or dismissing it: it cannot be retrieved later. Password changes revoke all browser sessions and rotate the token; token reset alone preserves sessions. **Log out** ends the current browser session.
+**Account** changes your password or resets your API token. Copy a newly issued token before closing its dialog. The token stays active, and its value cannot be viewed again. Password changes revoke all browser sessions and rotate the token; token reset alone preserves sessions. **Log out** ends the current browser session.
 
 Administrators use **All pages** and **Users** to search and paginate the instance, filter pages by owner ID, transfer ownership, reset credentials and delete accounts/pages. Transfers require the latest version; the old owner immediately loses management privileges. Administrators are trusted: they can read and change every page, including password-protected pages, reset credentials and transfer ownership. A page access password does not hide content from administrators or the operator.
 
@@ -120,7 +120,8 @@ Administrators can provision accounts with `POST /_/api/v1/users` using a bearer
 API token and a JSON body containing `username`, `password`, and `role`
 (`administrator` or `user`). The 201 response contains `user` metadata and its
 one-time `token`; save the token then, as account reads never disclose it.
-Usernames and roles cannot be changed. Duplicate usernames return 409; invalid
+Usernames and roles cannot be changed. User IDs deleted after the schema 5 upgrade are never reassigned.
+Duplicate usernames return 409; invalid
 credentials or roles return 400. Passwords preserve Unicode and spaces.
 
 `GET /_/api/v1/users` is administrator-only and returns
@@ -158,7 +159,7 @@ forwarding headers.
 Authenticated users publish immediately with `POST /_/api/v1/pages`, sending
 `{"markdown":"# Hello","slug":"hello"}`. Omit `slug` for a generated address;
 empty Markdown is allowed. Custom slugs use 1–64 lowercase ASCII letters, digits,
-and single interior hyphens. Occupied custom slugs return 409. Markdown is limited
+and single interior hyphens. Occupied custom slugs return HTTP 409 with `{"code":"slug_taken"}`. Markdown is limited
 to 1 MiB of UTF-8 bytes; JSON request bodies are bounded at 8 MiB to allow escaping.
 
 Read source and metadata at `GET /_/api/v1/pages/by-slug/hello`, or plain Markdown
@@ -175,7 +176,8 @@ Page management uses the immutable `id` from publication or management lists:
 `DELETE /_/api/v1/pages/{id}` with `{"version":2}`. Authenticate as the owner
 or an administrator. PATCH accepts either or both Markdown and slug; every successful
 change advances the version and update timestamp. Supply the last-read version;
-stale edits and deletions return 409 without modifying the page.
+stale edits, deletions, and ownership transfers return HTTP 409 with
+`{"code":"stale_version"}` without modifying the page.
 
 Changing a slug preserves page identity, ownership, content, and access policy.
 The previous slug immediately becomes reusable and has no redirect. Deletion
@@ -242,7 +244,7 @@ See [Releasing Pagelet](docs/releasing.md) for the tagged build, draft review, a
 
 `cargo test --test acceptance` runs the actual executable with a real temporary SQLite directory through initialization, user provisioning, publication/raw reading, password verification, token rotation, ownership transfer, and permanent account/page deletion. It stops the process, copies the entire current data directory, and runs the restored instance from the copy. Requests and observed responses are checked against the public OpenAPI operation's status, media type, and structural schemas (references, required fields, types, enums, and constants), including conflicts and rate limits. This is a focused contract regression check, not a general OpenAPI/JSON Schema conformance engine.
 
-The remaining HTTP/SQLite suites cover session/CSRF and authorization alternatives, validation boundaries, concurrency, proxy abuse controls, credential revocation, and forward migration fixtures for schema versions 1–3. CLI tests cover uninitialized startup refusal, recovery, repeat initialization refusal, and newer-schema rejection. Run the full suite for release acceptance:
+The remaining HTTP/SQLite suites cover session/CSRF and authorization alternatives, validation boundaries, concurrency, proxy abuse controls, credential revocation, and forward migration fixtures for schema versions 1–4. CLI tests cover uninitialized startup refusal, recovery, repeat initialization refusal, and newer-schema rejection. Run the full suite for release acceptance:
 
 ```sh
 cargo test
