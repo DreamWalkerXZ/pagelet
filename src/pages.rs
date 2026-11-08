@@ -9,6 +9,14 @@ use rand::Rng;
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 
+pub(crate) fn page_conflict(code: &'static str) -> Response {
+    (
+        StatusCode::CONFLICT,
+        Json(serde_json::json!({"code": code})),
+    )
+        .into_response()
+}
+
 #[derive(Serialize)]
 pub(crate) struct Page {
     id: i64,
@@ -89,7 +97,7 @@ pub(crate) async fn create(
                 return Ok((StatusCode::CREATED, [(header::CACHE_CONTROL, "no-store")], Json(page)).into_response());
             }
             Err(rusqlite::Error::SqliteFailure(error, _)) if error.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE => {
-                if body.slug.is_some() { return Err(StatusCode::CONFLICT); }
+                if body.slug.is_some() { return Ok(page_conflict("slug_taken")); }
             }
             Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
         }
@@ -384,7 +392,7 @@ pub(crate) async fn edit(
     let account = crate::authenticated_user_in(&tx, &headers, (state.clock)())?;
     let mut page = management_page(&tx, id, &account)?;
     if page.version != body.version {
-        return Err(StatusCode::CONFLICT);
+        return Ok(page_conflict("stale_version"));
     }
     if body.markdown.is_none() && body.slug.is_none() && body.access_password.is_none() {
         return Err(StatusCode::BAD_REQUEST);
@@ -406,18 +414,16 @@ pub(crate) async fn edit(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .as_millis() as i64;
     page.updated_at = now.max(page.updated_at + 1);
-    tx.execute(
+    if let Err(error) = tx.execute(
         "UPDATE pages SET markdown = ?1, slug = ?2, version = ?3, updated_at = ?4, access_password_hash = ?6 WHERE id = ?5",
         params![page.markdown, page.slug, page.version, page.updated_at, id, page.access_password_hash],
-    )
-    .map_err(|error| match error {
-        rusqlite::Error::SqliteFailure(error, _)
-            if error.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE =>
-        {
-            StatusCode::CONFLICT
+    ) {
+        if matches!(error, rusqlite::Error::SqliteFailure(error, _)
+            if error.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE) {
+            return Ok(page_conflict("slug_taken"));
         }
-        _ => StatusCode::INTERNAL_SERVER_ERROR,
-    })?;
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
     tx.commit().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(([(header::CACHE_CONTROL, "no-store")], Json(page)).into_response())
 }
@@ -427,7 +433,7 @@ pub(crate) async fn delete(
     Path(id): Path<i64>,
     headers: HeaderMap,
     body: Result<Json<DeletePage>, axum::extract::rejection::JsonRejection>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<Response, StatusCode> {
     let Json(body) = body.map_err(|_| StatusCode::BAD_REQUEST)?;
     if body.version < 1 {
         return Err(StatusCode::BAD_REQUEST);
@@ -442,14 +448,14 @@ pub(crate) async fn delete(
     let account = crate::authenticated_user_in(&tx, &headers, (state.clock)())?;
     let page = management_page(&tx, id, &account)?;
     if page.version != body.version {
-        return Err(StatusCode::CONFLICT);
+        return Ok(page_conflict("stale_version"));
     }
     tx.execute("DELETE FROM pages WHERE id = ?1", [id])
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     tx.commit().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     drop(db);
     tracing::info!(event = %"page_deleted", page_id = id, actor_id = account.id);
-    Ok(StatusCode::NO_CONTENT)
+    Ok(StatusCode::NO_CONTENT.into_response())
 }
 
 pub(crate) fn valid_slug(slug: &str) -> bool {

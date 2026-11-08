@@ -652,7 +652,25 @@
             "description": "Missing or invalid authentication"
           },
           "409": {
-            "description": "Custom slug already occupied"
+            "description": "Custom slug already occupied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "slug_taken"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           },
           "413": {
             "description": "Markdown exceeds 1 MiB or request exceeds 8 MiB"
@@ -971,7 +989,26 @@
             "description": "Invalid JSON or parameters"
           },
           "409": {
-            "description": "Stale page version or occupied slug; no changes applied"
+            "description": "Stale page version or occupied slug; no changes applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "stale_version",
+                        "slug_taken"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           },
           "413": {
             "description": "Markdown exceeds 1 MiB or encoded body exceeds 8 MiB"
@@ -1035,7 +1072,25 @@
             "description": "Invalid JSON or parameters"
           },
           "409": {
-            "description": "Stale page version or occupied slug; no changes applied"
+            "description": "Stale page version; no changes applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "stale_version"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -1226,7 +1281,25 @@
             "description": "Page or account not found"
           },
           "409": {
-            "description": "Stale page version, user owns pages, or final administrator"
+            "description": "Stale page version; no changes applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "stale_version"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal persistence error"
@@ -1242,7 +1315,7 @@
             }
           },
           "400": {
-            "description": "Malformed ownership request"
+            "description": "Invalid request or the target is already the current owner"
           }
         }
       }

@@ -69,12 +69,23 @@ test("personal lists isolate owners, search and paginate; credentials transition
   await page
     .getByRole("button", { name: "Reset API Token", exact: true })
     .click();
+  const confirmation = page.getByRole("dialog", { name: "Reset API Token" });
+  await expect(confirmation).toContainText("immediately");
+  await confirmation.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByLabel("New API Token")).toBeHidden();
+  await page.getByRole("button", { name: "Reset API Token" }).click();
+  await confirmation.getByRole("button", { name: "Reset API Token" }).click();
+  await expect(page.getByRole("dialog")).toContainText("view it again");
   await expect(page.getByLabel("New API Token", { exact: true })).toBeVisible();
   const token = await page
     .getByLabel("New API Token", { exact: true })
     .inputValue();
   expect(token.length).toBeGreaterThan(20);
   expect((await page.request.get("/_/api/v1/me")).status()).toBe(200);
+  await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+  expect((await page.request.get("/_/api/v1/me", {
+    headers: { authorization: `Bearer ${token}` },
+  })).status()).toBe(200);
   await page.reload();
   await expect(page.getByLabel("New API Token", { exact: true })).toBeHidden();
   await page.getByLabel("Current password").fill("original password");
@@ -86,7 +97,7 @@ test("personal lists isolate owners, search and paginate; credentials transition
     .click();
   await expect(page.getByLabel("New API Token", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Dismiss Token", exact: true }),
+    page.getByRole("button", { name: "Close", exact: true }),
   ).toBeVisible();
   expect((await page.request.get("/_/api/v1/me")).status()).toBe(401);
   expect((await otherSession.request.get(accountURL)).status()).toBe(401);
@@ -103,7 +114,7 @@ test("personal lists isolate owners, search and paginate; credentials transition
   expect(
     await page.evaluate(() => [localStorage.length, sessionStorage.length]),
   ).toEqual([0, 0]);
-  await page.getByRole("button", { name: "Dismiss Token", exact: true }).click();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByLabel("Username").fill("account-owner");
   await page.getByLabel("Account password").fill("replacement password");
   await page.getByRole("button", { name: "Log In", exact: true }).click();

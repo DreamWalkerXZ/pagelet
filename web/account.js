@@ -1,5 +1,5 @@
 import { requestJSON } from "/_/assets/api.js";
-import { navigation, notify, pageRow, showToken } from "/_/assets/ui.js";
+import { confirmAction, navigation, notify, pageRow, showToken } from "/_/assets/ui.js";
 
 const byId = (id) => document.getElementById(id);
 let user;
@@ -91,11 +91,16 @@ function accountView() {
         () => location.replace("/_/app/login"));
     });
   };
-  byId("reset-token").onclick = () =>
-    mutation(async () => {
+  byId("reset-token").onclick = async () => {
+    if (!await confirmAction("Reset API Token",
+      "Your previous API token will stop working immediately. Your web sessions will stay signed in.",
+    )) return;
+    await mutation(async () => {
       const result = await requestJSON("/me/token", { method: "POST" });
-      showToken(result.token, "API token reset. Your web session remains signed in.");
+      showToken(result.token, "API token reset. Your web session remains signed in.",
+        () => byId("reset-token").focus());
     });
+  };
   byId("logout").onclick = () =>
     mutation(async () => {
       await requestJSON("/logout", { method: "POST" });

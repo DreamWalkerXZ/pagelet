@@ -53,7 +53,7 @@ impl AppState {
         let transaction = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let version: i64 =
             transaction.pragma_query_value(None, "user_version", |row| row.get(0))?;
-        if version > 4 {
+        if version > 5 {
             bail!("Database schema is newer than this executable supports");
         }
         if version < 1 {
@@ -86,6 +86,13 @@ impl AppState {
         }
         if version < 4 {
             transaction.execute_batch("CREATE TABLE page_grants (token_hash BLOB PRIMARY KEY, page_id INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL); PRAGMA user_version = 4;")?;
+        }
+        if version < 5 {
+            transaction.execute_batch(
+                "CREATE TABLE user_id_sequence (last_id INTEGER NOT NULL);
+                 INSERT INTO user_id_sequence SELECT COALESCE(MAX(id), 0) FROM users;
+                 PRAGMA user_version = 5;",
+            )?;
         }
         transaction.commit()?;
         Ok(Self {
@@ -137,10 +144,19 @@ impl AppState {
         if count != 0 {
             bail!("Instance is already initialized");
         }
-        transaction.execute("INSERT INTO users (username, role, password_hash, token_hash) VALUES (?1, 'administrator', ?2, ?3)", params![username, hash, token_hash(&token)])?;
+        let id = next_user_id(&transaction)?;
+        transaction.execute("INSERT INTO users (id, username, role, password_hash, token_hash) VALUES (?1, ?2, 'administrator', ?3, ?4)", params![id, username, hash, token_hash(&token)])?;
         transaction.commit()?;
         Ok(token)
     }
+}
+
+pub(crate) fn next_user_id(transaction: &rusqlite::Transaction<'_>) -> rusqlite::Result<i64> {
+    transaction.query_row(
+        "UPDATE user_id_sequence SET last_id = last_id + 1 RETURNING last_id",
+        [],
+        |row| row.get(0),
+    )
 }
 
 pub fn validate_username(username: &str) -> Result<()> {

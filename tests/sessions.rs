@@ -470,14 +470,17 @@ async fn administrators_can_reset_credentials_and_cookie_mutations_require_csrf(
 
 #[tokio::test]
 async fn older_instances_upgrade_pages_and_sessions_without_losing_credentials() {
-    for version in [1, 2, 3] {
+    for version in [1, 2, 3, 4] {
         let dir = tempfile::tempdir().unwrap();
         let state = AppState::open(dir.path()).unwrap();
         let token = state.initialize("admin", "a long password").unwrap();
         drop(state);
         // Recreate the previous release's schema as an upgrade fixture.
         let db = rusqlite::Connection::open(dir.path().join("pagelet.sqlite3")).unwrap();
-        db.execute_batch("DROP TABLE page_grants;").unwrap();
+        db.execute_batch("DROP TABLE user_id_sequence;").unwrap();
+        if version < 4 {
+            db.execute_batch("DROP TABLE page_grants;").unwrap();
+        }
         if version < 3 {
             db.execute_batch("DROP TABLE sessions;").unwrap();
         }

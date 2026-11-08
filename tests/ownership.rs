@@ -168,6 +168,23 @@ async fn transfer_preserves_page_revokes_grants_and_allows_account_deletion() {
         .json()
         .await
         .unwrap();
+    let same_owner = c
+        .post(&transfer)
+        .bearer_auth(&admin)
+        .json(&json!({"version":1,"owner_id":alice_id}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(same_owner.status(), 400);
+    assert_eq!(
+        c.get(format!("{url}/pages/by-slug/secret"))
+            .header("x-pagelet-grant", grant["grant"].as_str().unwrap())
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
     let changed = c
         .post(&transfer)
         .bearer_auth(&admin)
@@ -182,15 +199,17 @@ async fn transfer_preserves_page_revokes_grants_and_allows_account_deletion() {
         assert_eq!(changed[field], page[field]);
     }
     assert_eq!(changed["owner_id"], bob["user"]["id"]);
+    let conflict = c
+        .post(&transfer)
+        .bearer_auth(&admin)
+        .json(&body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(conflict.status(), 409);
     assert_eq!(
-        c.post(&transfer)
-            .bearer_auth(&admin)
-            .json(&body)
-            .send()
-            .await
-            .unwrap()
-            .status(),
-        409
+        conflict.json::<Value>().await.unwrap()["code"],
+        "stale_version"
     );
     assert_eq!(
         c.get(format!("{url}/pages/{id}"))

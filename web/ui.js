@@ -19,11 +19,11 @@ export function notify(message, error = false) {
   const text = document.createElement("span");
   text.setAttribute("role", error ? "alert" : "status");
   text.textContent = message;
-  const dismiss = Object.assign(document.createElement("button"), {
-    type: "button", textContent: "Dismiss",
+  const close = Object.assign(document.createElement("button"), {
+    type: "button", textContent: "Close",
   });
-  dismiss.onclick = () => popup.remove();
-  popup.append(text, dismiss);
+  close.onclick = () => popup.remove();
+  popup.append(text, close);
   let stack = document.querySelector(".popup-stack");
   if (!stack) {
     stack = document.createElement("div");
@@ -51,6 +51,37 @@ export async function copy(value) {
   }
 }
 
+export function confirmAction(action, ...details) {
+  const dialog = document.createElement("dialog");
+  dialog.setAttribute("aria-label", action);
+  dialog.setAttribute("aria-describedby", "confirmation-details");
+  const form = document.createElement("form");
+  form.method = "dialog";
+  const description = document.createElement("div");
+  description.id = "confirmation-details";
+  for (const detail of details) {
+    const paragraph = document.createElement("p");
+    paragraph.textContent = detail;
+    description.append(paragraph);
+  }
+  const cancel = Object.assign(document.createElement("button"), {
+    textContent: "Cancel", value: "cancel", autofocus: true,
+  });
+  const confirm = Object.assign(document.createElement("button"), {
+    textContent: action, value: "confirm",
+  });
+  form.append(description, cancel, " ", confirm);
+  dialog.append(form);
+  document.body.append(dialog);
+  return new Promise((resolve) => {
+    dialog.addEventListener("close", () => {
+      dialog.remove();
+      resolve(dialog.returnValue === "confirm");
+    }, { once: true });
+    dialog.showModal();
+  });
+}
+
 export function showToken(token, message, afterClose) {
   const dialog = document.createElement("dialog");
   dialog.setAttribute("aria-label", "Save Your API Token");
@@ -60,7 +91,10 @@ export function showToken(token, message, afterClose) {
   label.append(input);
   const description = Object.assign(document.createElement("p"), { textContent: message });
   const copyButton = Object.assign(document.createElement("button"), { textContent: "Copy Token" });
-  const dismiss = Object.assign(document.createElement("button"), { textContent: "Dismiss Token" });
+  const warning = Object.assign(document.createElement("p"), {
+    textContent: "Save this API token before closing. You won’t be able to view it again.",
+  });
+  const close = Object.assign(document.createElement("button"), { textContent: "Close" });
   copyButton.onclick = async () => {
     try {
       await navigator.clipboard.writeText(input.value);
@@ -70,7 +104,7 @@ export function showToken(token, message, afterClose) {
       copyButton.textContent = "Copy Token Manually";
     }
   };
-  dismiss.onclick = () => dialog.close();
+  close.onclick = () => dialog.close();
   dialog.addEventListener("cancel", (event) => event.preventDefault());
   const clear = () => { input.value = ""; dialog.remove(); };
   window.addEventListener("pagehide", clear, { once: true });
@@ -79,7 +113,7 @@ export function showToken(token, message, afterClose) {
     clear();
     afterClose?.();
   });
-  dialog.append(description, label, copyButton, " ", dismiss);
+  dialog.append(description, warning, label, copyButton, " ", close);
   document.body.append(dialog);
   dialog.showModal();
   input.select();

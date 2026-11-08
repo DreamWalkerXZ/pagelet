@@ -28,12 +28,18 @@ test("logs in, publishes and previews a page through its stable editor URL", asy
   await page.getByRole("link", { name: "Visit Page" }).click();
   await expect(page.locator("article")).toHaveText(preview);
   await page.goto(editorURL);
+  const save = page.getByRole("button", { name: "Save Changes", exact: true });
+  const confirmation = page.getByRole("dialog", { name: "Save Changes" });
   await page.getByLabel("Slug", { exact: true }).fill("editor-fern-renamed");
-  await page.getByLabel("Password action").selectOption("replace");
+  await page.getByLabel("Access Password Action").selectOption("replace");
+  await save.click();
+  await expect(page.getByRole("alert")).toContainText("Enter a new access password");
   await page
     .getByLabel("Access password", { exact: true })
     .fill("new fern secret");
-  await page.getByRole("button", { name: "Save Changes" }).click();
+  await save.click();
+  await expect(confirmation).toContainText("will not redirect");
+  await confirmation.getByRole("button", { name: "Save Changes" }).click();
   await expect(page.getByRole("status")).toHaveText("Changes saved.");
   await expect(page.getByRole("link", { name: "Visit Page" })).toHaveAttribute(
     "href",
@@ -54,11 +60,19 @@ test("logs in, publishes and previews a page through its stable editor URL", asy
   await expect(
     readPage.getByRole("heading", { name: "Editor fern" }),
   ).toBeVisible();
-  await page.getByLabel("Password action").selectOption("remove");
-  await page.getByRole("button", { name: "Save Changes" }).click();
+  await page.getByLabel("Access Password Action").selectOption("remove");
+  await page.getByLabel("Slug", { exact: true }).fill("editor-fern-public");
+  await expect(page.getByRole("link", { name: "Visit Page" })).toHaveAttribute("href", "/editor-fern-renamed");
+  await save.click();
+  await expect(confirmation).toContainText("/editor-fern-public");
+  await expect(confirmation).toContainText("Anyone with the link");
+  await confirmation.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByLabel("Slug", { exact: true })).toHaveValue("editor-fern-public");
+  await save.click();
+  await confirmation.getByRole("button", { name: "Save Changes" }).click();
   await expect(page.getByRole("status")).toHaveText("Changes saved.");
   await visitor.clearCookies();
-  await readPage.reload();
+  await readPage.goto("/editor-fern-public");
   await expect(
     readPage.getByRole("heading", { name: "Editor fern" }),
   ).toBeVisible();
@@ -98,6 +112,17 @@ test("preserves work on validation, stale versions and revoked sessions, then de
   await expect(page.getByRole("alert")).toContainText("Check your slug");
   await expect(page.getByLabel("Markdown")).toHaveValue("# Unsaved fern");
   await page.getByLabel("Slug", { exact: true }).fill(record.slug);
+  await page.request.post("/_/api/v1/pages", {
+    headers: { "x-pagelet-csrf": "1" },
+    data: { slug: "occupied", markdown: "" },
+  });
+  await page.getByLabel("Slug", { exact: true }).fill("occupied");
+  await page.getByRole("button", { name: "Save Changes" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Save Changes" }).click();
+  await expect(page.getByRole("alert")).toContainText("slug is already in use");
+  await expect(page.getByRole("button", { name: "Reload Server Version" })).toBeHidden();
+  await expect(page.getByLabel("Markdown")).toHaveValue("# Unsaved fern");
+  await page.getByLabel("Slug", { exact: true }).fill(record.slug);
   const changed = await page.request.patch(endpoint, {
     headers: { "x-pagelet-csrf": "1" },
     data: { version: record.version, markdown: "# Changed elsewhere" },
@@ -109,12 +134,12 @@ test("preserves work on validation, stale versions and revoked sessions, then de
   expect((await (await page.request.get(endpoint)).json()).markdown).toBe(
     "# Changed elsewhere",
   );
-  page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Delete Permanently" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete Permanently" }).click();
   await expect(page.getByRole("alert")).toContainText("Conflict");
   expect((await page.request.get(endpoint)).status()).toBe(200);
-  page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Reload Server Version" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Reload Server Version" }).click();
   await expect(page.getByLabel("Markdown")).toHaveValue("# Changed elsewhere");
   await page.getByLabel("Markdown").fill("# Recovered after expiry");
   await page.request.post("/_/api/v1/logout", {
@@ -130,8 +155,8 @@ test("preserves work on validation, stale versions and revoked sessions, then de
   await page.getByRole("button", { name: "Log In" }).click();
   await page.getByRole("button", { name: "Save Changes" }).click();
   await expect(page.getByRole("status")).toHaveText("Changes saved.");
-  page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Delete Permanently" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete Permanently" }).click();
   await expect(page.getByRole("status")).toContainText(
     "Page permanently deleted",
   );

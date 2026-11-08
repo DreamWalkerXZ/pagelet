@@ -129,16 +129,17 @@ async fn validation_and_discovery_preserve_owner_boundaries() {
             201
         );
     }
+    let conflict = client
+        .post(format!("{url}/pages"))
+        .bearer_auth(&admin)
+        .json(&json!({"slug":"a","markdown":"replace"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(conflict.status(), 409);
     assert_eq!(
-        client
-            .post(format!("{url}/pages"))
-            .bearer_auth(&admin)
-            .json(&json!({"slug":"a","markdown":"replace"}))
-            .send()
-            .await
-            .unwrap()
-            .status(),
-        409
+        conflict.json::<Value>().await.unwrap()["code"],
+        "slug_taken"
     );
     let generated: Value = client
         .post(format!("{url}/pages"))
@@ -357,16 +358,17 @@ async fn stable_id_edits_conflicts_and_permanent_deletion() {
         201
     );
     for method in [reqwest::Method::PATCH, reqwest::Method::DELETE] {
+        let conflict = client
+            .request(method, &target)
+            .bearer_auth(&token)
+            .json(&json!({"version":1}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(conflict.status(), 409);
         assert_eq!(
-            client
-                .request(method, &target)
-                .bearer_auth(&token)
-                .json(&json!({"version":1}))
-                .send()
-                .await
-                .unwrap()
-                .status(),
-            409
+            conflict.json::<Value>().await.unwrap()["code"],
+            "stale_version"
         );
     }
     assert_eq!(
@@ -496,16 +498,17 @@ async fn page_management_authorization_validation_and_competing_mutations() {
         .unwrap()
         .error_for_status()
         .unwrap();
+    let conflict = client
+        .patch(&target)
+        .bearer_auth(&tokens[0])
+        .json(&json!({"version":1,"slug":"taken","markdown":"lost"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(conflict.status(), 409);
     assert_eq!(
-        client
-            .patch(&target)
-            .bearer_auth(&tokens[0])
-            .json(&json!({"version":1,"slug":"taken","markdown":"lost"}))
-            .send()
-            .await
-            .unwrap()
-            .status(),
-        409
+        conflict.json::<Value>().await.unwrap()["code"],
+        "slug_taken"
     );
     assert_eq!(
         client
