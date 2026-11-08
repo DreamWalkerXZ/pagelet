@@ -253,6 +253,10 @@ button:focus-visible {
   pointer-events: none;
   z-index: 2;
 }
+.popup-stack:has(> .popup > [role="status"]) {
+  inset: auto 16px 16px auto;
+  transform: none;
+}
 .popup {
   display: flex;
   align-items: center;
