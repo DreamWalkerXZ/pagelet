@@ -13,7 +13,7 @@ test("logs in, publishes and previews a page through its stable editor URL", asy
   await page.getByRole("link", { name: "New Page", exact: true }).click();
   await page
     .getByLabel("Markdown")
-    .fill("# Editor fern\n\n~~old~~\n\n- [x] Complete");
+    .fill("# Editor fern\n\n## Fern notes\n\n~~old~~\n\n- [x] Complete");
   await expect(
     page.getByRole("heading", { name: "Editor fern" }),
   ).toBeVisible();
@@ -27,7 +27,14 @@ test("logs in, publishes and previews a page through its stable editor URL", asy
   const preview = await page.locator("#preview").textContent();
   await page.getByRole("link", { name: "Visit Page" }).click();
   await expect(page.locator("article")).toHaveText(preview);
+  const headingSize = await page.getByRole("heading", { name: "Fern notes", level: 2 })
+    .evaluate((heading) => getComputedStyle(heading).fontSize);
   await page.goto(editorURL);
+  const source = page.getByLabel("Markdown");
+  await source.fill((await source.inputValue()).replace("## Fern notes", "## Updated fern notes"));
+  await expect(page.getByLabel("Page Preview").getByRole("heading", {
+    name: "Updated fern notes", level: 2,
+  })).toHaveCSS("font-size", headingSize);
   const save = page.getByRole("button", { name: "Save Changes", exact: true });
   const confirmation = page.getByRole("dialog", { name: "Save Changes" });
   await page.getByLabel("Slug", { exact: true }).fill("editor-fern-renamed");

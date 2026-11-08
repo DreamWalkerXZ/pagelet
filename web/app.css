@@ -51,7 +51,7 @@ small {
   gap: 32px;
   margin: 28px 0;
 }
-.workspace h2 {
+#preview-title {
   font-size: 0.8rem;
   font-weight: 400;
   letter-spacing: normal;
@@ -174,7 +174,7 @@ small {
   margin-top: 0;
 }
 .workspace label,
-.workspace h2 {
+#preview-title {
   display: block;
   margin: 0 0 6px;
   line-height: 1.75;
