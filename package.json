@@ -6,7 +6,7 @@
     "test:browser": "node tests/browser/run.js"
   },
   "dependencies": {
-    "dompurify": "3.3.3",
+    "dompurify": "3.4.17",
     "marked": "17.0.1"
   },
   "devDependencies": {
