@@ -1,7 +1,7 @@
 # Releasing Pagelet
 
 1. Merge the release changes and push a version tag matching `Cargo.toml`, such
-   as `v0.1.0`. The **Release** workflow tests each download and image platform.
+   as `v0.2.0`. The **Release** workflow tests each download and image platform.
 2. Wait for the tag workflow to succeed. Review the draft release notes,
    downloads, and checksums, then publish the draft as a regular release on
    GitHub. The Docker image is published by the separate release-event run.

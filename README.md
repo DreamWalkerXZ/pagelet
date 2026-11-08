@@ -28,13 +28,13 @@ curl http://127.0.0.1:8080/_/openapi.json
 
 ## Docker
 
-The [Docker Hub image](https://hub.docker.com/r/dreamwalkerxz/pagelet) supports Linux amd64 and arm64. Pin `dreamwalkerxz/pagelet:0.1.0` to this release or use `dreamwalkerxz/pagelet:latest` for the latest stable release.
+The [Docker Hub image](https://hub.docker.com/r/dreamwalkerxz/pagelet) supports Linux amd64 and arm64. Pin `dreamwalkerxz/pagelet:0.2.0` to this release or use `dreamwalkerxz/pagelet:latest` for the latest stable release.
 
 ```sh
 docker volume create pagelet-data
-docker run --rm -it -v pagelet-data:/data dreamwalkerxz/pagelet:0.1.0 init
+docker run --rm -it -v pagelet-data:/data dreamwalkerxz/pagelet:0.2.0 init
 docker run -d --name pagelet -p 127.0.0.1:8080:8080 \
-  -v pagelet-data:/data dreamwalkerxz/pagelet:0.1.0
+  -v pagelet-data:/data dreamwalkerxz/pagelet:0.2.0
 ```
 
 For unattended setup, skip the interactive command and pass `-e PAGELET_ADMIN_USERNAME -e PAGELET_ADMIN_PASSWORD` to the server container with both variables exported locally. Keep the bootstrap password in your deployment's secret configuration. You can recreate the container without those variables after initialization.
