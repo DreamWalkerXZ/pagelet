@@ -1,4 +1,7 @@
-use crate::{AppState, authenticated_user, pages};
+use crate::{
+    AppState, authenticated_user,
+    pages::{self, PageMutationError},
+};
 use axum::{
     Router,
     extract::{Request, State},
@@ -17,6 +20,14 @@ use rmcp::{
     },
 };
 use serde_json::json;
+
+#[derive(serde::Deserialize, rmcp::schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+#[serde(deny_unknown_fields)]
+struct PublishPage {
+    markdown: String,
+    slug: Option<String>,
+}
 
 #[derive(Clone)]
 struct PageletMcp {
@@ -42,6 +53,35 @@ impl PageletMcp {
             Ok(result) => CallToolResult::structured(result),
             Err(status) => tool_error(status),
         })
+    }
+
+    #[tool(
+        description = "Immediately publish a public Markdown page. Omit the slug to generate one.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn publish_page(
+        &self,
+        Parameters(input): Parameters<PublishPage>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let headers = request_headers(&context)?;
+        Ok(page_mutation_result(
+            &self.state,
+            pages::create_page(
+                &self.state,
+                headers,
+                pages::CreatePage {
+                    markdown: input.markdown,
+                    slug: input.slug,
+                    access_password: None,
+                },
+            ),
+        ))
     }
 }
 
@@ -71,6 +111,33 @@ fn tool_error(status: StatusCode) -> CallToolResult {
         _ => "internal_error",
     };
     CallToolResult::structured_error(json!({"code": code}))
+}
+
+fn page_mutation_result(
+    state: &AppState,
+    result: Result<pages::Page, PageMutationError>,
+) -> CallToolResult {
+    match result {
+        Ok(page) => {
+            let url = match state.deployment.external_url() {
+                Some(base) => format!(
+                    "{}://{}{}/{}",
+                    base.scheme_str().expect("External URL has a scheme"),
+                    base.authority().expect("External URL has an authority"),
+                    base.path().trim_end_matches('/'),
+                    page.slug,
+                ),
+                None => format!("/{}", page.slug),
+            };
+            CallToolResult::structured(
+                json!({"id": page.id, "slug": page.slug, "version": page.version, "url": url}),
+            )
+        }
+        Err(PageMutationError::Conflict(code)) => {
+            CallToolResult::structured_error(json!({"code": code}))
+        }
+        Err(PageMutationError::Status(status)) => tool_error(status),
+    }
 }
 
 async fn authorize(State(state): State<AppState>, request: Request, next: Next) -> Response {

@@ -51,6 +51,20 @@ bearer_token_env_var = "PAGELET_TOKEN"
 of the slug and `page` and `per_page` for pagination. Ordinary users see
 their own pages. Administrators can list all pages or filter by `owner_id`.
 
+`publish_page` immediately publishes a public page from `markdown` and an
+optional `slug`. It returns `id`, `slug`, `version` and a reader `url`.
+The link uses the configured external URL when set and a root-relative
+path otherwise.
+If the slug is already in use, the tool returns `slug_taken`.
+
+To make Codex prompt before publishing, add this per-tool setting to your
+[Codex configuration](https://learn.chatgpt.com/docs/config-file/config-reference).
+
+```toml
+[mcp_servers.pagelet.tools.publish_page]
+approval_mode = "prompt"
+```
+
 ## Docker
 
 The [Docker Hub image](https://hub.docker.com/r/dreamwalkerxz/pagelet) supports Linux amd64 and arm64. Pin `dreamwalkerxz/pagelet:0.2.0` to this release or use `dreamwalkerxz/pagelet:latest` for the latest stable release.
