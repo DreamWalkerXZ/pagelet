@@ -357,16 +357,33 @@ pub(crate) async fn management_read(
     Path(id): Path<i64>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
+    Ok((
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(read_management_page(&state, id, &headers)?),
+    )
+        .into_response())
+}
+
+pub(crate) fn read_management_page(
+    state: &AppState,
+    id: i64,
+    headers: &HeaderMap,
+) -> Result<Page, StatusCode> {
     let db = state
         .db
         .lock()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let account = crate::authenticated_user_in(&db, &headers, (state.clock)())?;
-    Ok((
-        [(header::CACHE_CONTROL, "no-store")],
-        Json(management_page(&db, id, &account)?),
-    )
-        .into_response())
+    let account = crate::authenticated_user_in(&db, headers, (state.clock)())?;
+    management_page(&db, id, &account)
+}
+
+pub(crate) fn read_page_content(page: Page) -> serde_json::Value {
+    serde_json::json!({
+        "id": page.id,
+        "slug": page.slug,
+        "markdown": page.markdown,
+        "version": page.version,
+    })
 }
 
 pub(crate) async fn edit(
