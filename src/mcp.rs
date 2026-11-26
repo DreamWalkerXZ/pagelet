@@ -43,6 +43,18 @@ struct ReadPage {
     id: i64,
 }
 
+#[derive(serde::Deserialize, rmcp::schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+#[serde(deny_unknown_fields)]
+struct EditPage {
+    /// The immutable Page ID returned by list_pages.
+    id: i64,
+    /// The last-read Page version returned by read_page.
+    version: i64,
+    markdown: Option<String>,
+    slug: Option<String>,
+}
+
 #[tool_router]
 impl PageletMcp {
     #[tool(
@@ -108,6 +120,37 @@ impl PageletMcp {
             ),
         ))
     }
+
+    #[tool(
+        description = "Immediately edit a manageable Pagelet page. Provide the last-read version and at least one of markdown or slug.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn edit_page(
+        &self,
+        Parameters(input): Parameters<EditPage>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let headers = request_headers(&context)?;
+        Ok(page_mutation_result(
+            &self.state,
+            pages::edit_page(
+                &self.state,
+                input.id,
+                headers,
+                pages::EditPage {
+                    version: input.version,
+                    markdown: input.markdown,
+                    slug: input.slug,
+                    access_password: None,
+                },
+            ),
+        ))
+    }
 }
 
 #[tool_handler(router = self.tool_router)]
@@ -158,6 +201,9 @@ fn page_mutation_result(
                 json!({"id": page.id, "slug": page.slug, "version": page.version, "url": url}),
             )
         }
+        Err(PageMutationError::Conflict("stale_version")) => CallToolResult::structured_error(
+            json!({"code": "stale_version", "message": "Reread the page with read_page and reconcile your changes before submitting another edit."}),
+        ),
         Err(PageMutationError::Conflict(code)) => {
             CallToolResult::structured_error(json!({"code": code}))
         }

@@ -57,11 +57,22 @@ The link uses the configured external URL when set and a root-relative
 path otherwise.
 If the slug is already in use, the tool returns `slug_taken`.
 
-To make Codex prompt before publishing, add this per-tool setting to your
-[Codex configuration](https://learn.chatgpt.com/docs/config-file/config-reference).
+`edit_page` immediately edits a manageable page by `id`. Pass the `version`
+last returned by `read_page` and one or both of `markdown` and `slug`.
+The tool preserves omitted fields and the page's access password. It returns
+the same fields as `publish_page`. After a `stale_version` error, call
+`read_page` again and reconcile your changes before submitting another edit.
+A conflicting slug returns `slug_taken`.
+
+Add these per-tool settings to your
+[Codex configuration](https://learn.chatgpt.com/docs/config-file/config-reference)
+to prompt before publishing or editing.
 
 ```toml
 [mcp_servers.pagelet.tools.publish_page]
+approval_mode = "prompt"
+
+[mcp_servers.pagelet.tools.edit_page]
 approval_mode = "prompt"
 ```
 
