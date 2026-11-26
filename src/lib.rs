@@ -285,7 +285,7 @@ pub fn router(state: AppState) -> Router {
         .route("/_/raw/{slug}", get(pages::raw))
         .route("/_/openapi.json", get(|| async { Json(openapi()) }))
         .layer(axum::middleware::from_fn(sessions::csrf));
-    if state.deployment.mcp_enabled {
+    if !state.deployment.mcp_disabled {
         router = router.merge(mcp::routes(state.clone()));
     }
     router

@@ -28,8 +28,10 @@ curl http://127.0.0.1:8080/_/openapi.json
 
 ## MCP
 
-Enable Streamable HTTP at `/_/mcp` with `pagelet serve --mcp` or
-`PAGELET_MCP=true`. The endpoint requires a Pagelet API token as a bearer
+Streamable HTTP is available at `/_/mcp` by default. To disable it, put
+`{"mcp": false}` in `config.json` in the Pagelet data directory and restart
+the service. In Docker, use `/data/config.json` on the persistent volume.
+The endpoint requires a Pagelet API token as a bearer
 credential on every request. Resetting the token revokes the previous one.
 For remote access, use the [HTTPS reverse proxy setup](#https-reverse-proxy-deployment)
 and set `--external-url` to the public site URL. MCP accepts requests whose

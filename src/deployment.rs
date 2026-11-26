@@ -5,7 +5,7 @@ use std::net::IpAddr;
 #[derive(Clone, Default)]
 pub struct Deployment {
     external_url: Option<Uri>,
-    pub(crate) mcp_enabled: bool,
+    pub(crate) mcp_disabled: bool,
     trusted: Vec<(IpAddr, u8)>,
 }
 impl Deployment {
@@ -39,7 +39,7 @@ impl Deployment {
         Ok(deployment)
     }
     pub fn with_mcp(mut self, enabled: bool) -> Self {
-        self.mcp_enabled = enabled;
+        self.mcp_disabled = !enabled;
         self
     }
 

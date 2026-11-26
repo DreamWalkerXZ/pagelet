@@ -39,10 +39,9 @@ impl TestServer {
                 "--listen",
                 &address.to_string(),
             ])
-            .env_remove("PAGELET_MCP")
             .env_remove("PAGELET_EXTERNAL_URL");
-        if enabled {
-            command.arg("--mcp");
+        if !enabled {
+            std::fs::write(directory.path().join("config.json"), r#"{"mcp":false}"#).unwrap();
         }
         if let Some(external_url) = external_url {
             command.args(["--external-url", external_url]);

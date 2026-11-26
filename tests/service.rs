@@ -39,7 +39,6 @@ async fn start_server(
         .env_remove("PAGELET_ADMIN_USERNAME")
         .env_remove("PAGELET_ADMIN_PASSWORD")
         .env_remove("PAGELET_EXTERNAL_URL")
-        .env_remove("PAGELET_MCP")
         .envs(environment.iter().copied());
     if let Some(filter) = filter {
         command.env("RUST_LOG", filter);
@@ -407,6 +406,20 @@ fn startup_reports_missing_bootstrap_variables_without_echoing_credentials() {
     }
 }
 
+#[test]
+fn serve_rejects_invalid_mcp_configuration() {
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::write(directory.path().join("config.json"), r#"{"mcp":"false"}"#).unwrap();
+    let result = Command::new(env!("CARGO_BIN_EXE_pagelet"))
+        .arg("--data-dir")
+        .arg(directory.path())
+        .arg("serve")
+        .output()
+        .unwrap();
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("config.json"));
+}
+
 #[tokio::test]
 async fn mcp_logs_omit_protected_markdown_even_with_sdk_tracing_requested() {
     use serde_json::{Value, json};
@@ -421,13 +434,7 @@ async fn mcp_logs_omit_protected_markdown_even_with_sdk_tracing_requested() {
     let updated = "# Private Markdown from edit_page";
 
     for filter in ["debug", "pagelet=debug,rmcp::service=trace"] {
-        let (server, address) = start_server(
-            directory.path(),
-            &client,
-            Some(filter),
-            &[("PAGELET_MCP", "true")],
-        )
-        .await;
+        let (server, address) = start_server(directory.path(), &client, Some(filter), &[]).await;
         let base = format!("http://{address}");
         let page: Value = client
             .post(format!("{base}/_/api/v1/pages"))

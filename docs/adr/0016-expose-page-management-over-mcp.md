@@ -1,6 +1,6 @@
 # Expose page management over MCP
 
-Pagelet serves MCP over Streamable HTTP at `/_/mcp` when explicitly enabled. The same executable serves the web interface, REST API, and MCP. Codex is the initial target client.
+Pagelet serves MCP over Streamable HTTP at `/_/mcp` by default. Operators can disable the endpoint in the data directory's `config.json`. The same executable serves the web interface, REST API, and MCP. Codex is the initial target client.
 
 Authenticate every MCP request with the existing Pagelet bearer API token. Account permissions and credential revocation apply to each request. The first release uses explicitly configured credentials and leaves OAuth discovery and login outside its scope.
 
@@ -16,4 +16,4 @@ Preserve the REST API's machine-readable `slug_taken` and `stale_version` errors
 
 Allow requests without an Origin header for native clients. When an Origin header is present, require it to match the explicitly configured site origin. Remote deployments use the existing HTTPS reverse proxy setup.
 
-Use an automated MCP client against the Streamable HTTP endpoint to discover and call all four tools as an ordinary user. Cover cross-owner denial, administrator access, token revocation, preservation of content after a stale edit, and endpoint availability only when MCP is enabled. Acceptance relies on simulated client requests and does not require running Codex.
+Use an automated MCP client against the Streamable HTTP endpoint to discover and call all four tools as an ordinary user. Cover cross-owner denial, administrator access, token revocation, preservation of content after a stale edit, default endpoint availability, and disabling the endpoint through configuration. Acceptance relies on simulated client requests and does not require running Codex.

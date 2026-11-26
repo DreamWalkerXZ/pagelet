@@ -68,7 +68,7 @@ async fn lists_searchable_manageable_metadata_with_rest_pagination() {
 }
 
 #[tokio::test]
-async fn endpoint_requires_enablement_allowed_host_and_origin_and_current_bearer_token() {
+async fn endpoint_honors_config_and_requires_allowed_host_origin_and_current_bearer_token() {
     let ping = json!({"jsonrpc": "2.0", "id": 1, "method": "ping"});
     let disabled = TestServer::start(false, None).await;
     assert_eq!(
