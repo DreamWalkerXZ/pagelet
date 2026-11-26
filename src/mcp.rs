@@ -189,10 +189,9 @@ fn page_mutation_result(
         Ok(page) => {
             let url = match state.deployment.external_url() {
                 Some(base) => format!(
-                    "{}://{}{}/{}",
+                    "{}://{}/{}",
                     base.scheme_str().expect("External URL has a scheme"),
                     base.authority().expect("External URL has an authority"),
-                    base.path().trim_end_matches('/'),
                     page.slug,
                 ),
                 None => format!("/{}", page.slug),

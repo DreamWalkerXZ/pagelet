@@ -68,7 +68,7 @@ async fn lists_searchable_manageable_metadata_with_rest_pagination() {
 }
 
 #[tokio::test]
-async fn endpoint_requires_explicit_enablement_allowed_origin_and_current_bearer_token() {
+async fn endpoint_requires_enablement_allowed_host_and_origin_and_current_bearer_token() {
     let ping = json!({"jsonrpc": "2.0", "id": 1, "method": "ping"});
     let disabled = TestServer::start(false, None).await;
     assert_eq!(
@@ -82,6 +82,24 @@ async fn endpoint_requires_explicit_enablement_allowed_origin_and_current_bearer
         404
     );
     let local = TestServer::start(true, None).await;
+    for (host, status) in [
+        ("localhost", 200),
+        ("[::1]", 200),
+        ("pagelet.internal", 403),
+    ] {
+        assert_eq!(
+            local
+                .mcp_request(ping.clone())
+                .bearer_auth(&local.admin)
+                .header("Host", host)
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            status,
+            "{host}"
+        );
+    }
     assert_eq!(
         local
             .mcp_request(ping.clone())
@@ -108,6 +126,19 @@ async fn endpoint_requires_explicit_enablement_allowed_origin_and_current_bearer
             .unwrap()
             .status(),
         200
+    );
+    assert_eq!(
+        server
+            .mcp_request(ping.clone())
+            .bearer_auth(&alice)
+            .header("Host", "elsewhere.example")
+            .header("X-Forwarded-Host", "pages.example")
+            .header("Origin", "https://pages.example")
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        403
     );
     for origin in [
         "https://elsewhere.example",

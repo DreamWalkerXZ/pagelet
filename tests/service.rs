@@ -28,7 +28,7 @@ async fn start_server(
     directory: &Path,
     client: &reqwest::Client,
     filter: Option<&str>,
-    bootstrap: &[(&str, &str)],
+    environment: &[(&str, &str)],
 ) -> (TestServer, String) {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
@@ -38,7 +38,9 @@ async fn start_server(
         .env_remove("RUST_LOG")
         .env_remove("PAGELET_ADMIN_USERNAME")
         .env_remove("PAGELET_ADMIN_PASSWORD")
-        .envs(bootstrap.iter().copied());
+        .env_remove("PAGELET_EXTERNAL_URL")
+        .env_remove("PAGELET_MCP")
+        .envs(environment.iter().copied());
     if let Some(filter) = filter {
         command.env("RUST_LOG", filter);
     }
@@ -402,6 +404,89 @@ fn startup_reports_missing_bootstrap_variables_without_echoing_credentials() {
         assert!(logs.contains(missing), "{logs}");
         assert!(!logs.contains("private-value"));
         assert!(result.stdout.is_empty());
+    }
+}
+
+#[tokio::test]
+async fn mcp_logs_omit_protected_markdown_even_with_sdk_tracing_requested() {
+    use serde_json::{Value, json};
+
+    let directory = tempfile::tempdir().unwrap();
+    let token = pagelet::AppState::open(directory.path())
+        .unwrap()
+        .initialize("admin", "a long password")
+        .unwrap();
+    let client = reqwest::Client::new();
+    let original = "# Private Markdown from read_page";
+    let updated = "# Private Markdown from edit_page";
+
+    for filter in ["debug", "pagelet=debug,rmcp::service=trace"] {
+        let (server, address) = start_server(
+            directory.path(),
+            &client,
+            Some(filter),
+            &[("PAGELET_MCP", "true")],
+        )
+        .await;
+        let base = format!("http://{address}");
+        let page: Value = client
+            .post(format!("{base}/_/api/v1/pages"))
+            .bearer_auth(&token)
+            .json(&json!({"markdown": original, "access_password": "page password"}))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        for (name, arguments) in [
+            ("read_page", json!({"id": page["id"]})),
+            (
+                "edit_page",
+                json!({"id": page["id"], "version": page["version"], "markdown": updated}),
+            ),
+        ] {
+            let response: Value = client
+                .post(format!("{base}/_/mcp"))
+                .bearer_auth(&token)
+                .header("Accept", "application/json, text/event-stream")
+                .header("MCP-Protocol-Version", "2025-11-25")
+                .json(&json!({"jsonrpc":"2.0", "id":1, "method":"tools/call", "params": {"name":name, "arguments":arguments}}))
+                .send()
+                .await
+                .unwrap()
+                .error_for_status()
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            let content = &response["result"]["structuredContent"];
+            assert_eq!(content["id"], page["id"]);
+            if name == "read_page" {
+                assert_eq!(content["markdown"], original);
+            } else {
+                assert_eq!(content["version"], 2);
+            }
+        }
+
+        let logs = stop_server(server).await;
+        assert!(has_event(
+            &logs,
+            &[
+                "DEBUG",
+                "event=request_completed",
+                "route=/_/mcp",
+                "status=200"
+            ]
+        ));
+        for secret in [original, updated, &token, "page password"] {
+            assert!(
+                !logs.contains(secret),
+                "MCP logs exposed a sensitive value with {filter}"
+            );
+        }
     }
 }
 

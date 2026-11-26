@@ -6,7 +6,7 @@ use std::{
     io::{self, IsTerminal, Write},
     path::PathBuf,
 };
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{EnvFilter, filter::filter_fn, prelude::*};
 
 #[derive(Parser)]
 #[command(version, about = "Self-hosted Markdown publishing")]
@@ -60,12 +60,19 @@ fn init_logging() -> Result<()> {
         _ => Ok(EnvFilter::new(DEFAULT_FILTER)),
     };
     let invalid = configured.is_err();
-    tracing_subscriber::fmt()
-        .with_env_filter(configured.unwrap_or_else(|_| EnvFilter::new(DEFAULT_FILTER)))
-        .with_writer(io::stderr)
-        .with_ansi(
-            io::stderr().is_terminal()
-                && std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty()),
+    tracing_subscriber::registry()
+        .with(configured.unwrap_or_else(|_| EnvFilter::new(DEFAULT_FILTER)))
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(io::stderr)
+                .with_ansi(
+                    io::stderr().is_terminal()
+                        && std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty()),
+                )
+                // The SDK can log complete tool requests and responses.
+                .with_filter(filter_fn(|metadata| {
+                    metadata.target() != "rmcp" && !metadata.target().starts_with("rmcp::")
+                })),
         )
         .try_init()
         .map_err(anyhow::Error::msg)?;

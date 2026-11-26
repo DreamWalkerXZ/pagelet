@@ -32,9 +32,12 @@ Enable Streamable HTTP at `/_/mcp` with `pagelet serve --mcp` or
 `PAGELET_MCP=true`. The endpoint requires a Pagelet API token as a bearer
 credential on every request. Resetting the token revokes the previous one.
 For remote access, use the [HTTPS reverse proxy setup](#https-reverse-proxy-deployment)
-and set `--external-url` to the public URL. Native clients may omit `Origin`.
-If a client sends it, the scheme, host and port must match the configured
-external URL.
+and set `--external-url` to the public site URL. MCP accepts requests whose
+`Host` names `localhost`, `127.0.0.1`, `[::1]` or the host configured in
+`--external-url`. Configure any non-loopback host in `--external-url` and
+have your proxy preserve the public `Host` header. Native clients may omit
+`Origin`. If a client sends it, the scheme, host and port must match the
+configured external URL.
 
 Add the following to [Codex's configuration](https://developers.openai.com/codex/mcp)
 and set `PAGELET_TOKEN` to your Pagelet API token in the environment that
@@ -51,10 +54,14 @@ bearer_token_env_var = "PAGELET_TOKEN"
 of the slug and `page` and `per_page` for pagination. Ordinary users see
 their own pages. Administrators can list all pages or filter by `owner_id`.
 
+`read_page` takes a Page ID (`id`) from `list_pages` and returns the page's
+`id`, `slug`, `markdown` and current `version`. Owners and administrators can
+read password-protected pages they manage.
+
 `publish_page` immediately publishes a public page from `markdown` and an
 optional `slug`. It returns `id`, `slug`, `version` and a reader `url`.
-The link uses the configured external URL when set and a root-relative
-path otherwise.
+The link uses `/<slug>` at the configured external origin, or a root-relative
+path when `--external-url` is unset.
 If the slug is already in use, the tool returns `slug_taken`.
 
 `edit_page` immediately edits a manageable page by `id`. Pass the `version`
@@ -160,7 +167,8 @@ invalid log filters. DEBUG adds one summary per
 response with the HTTP method, matched route template (or `unmatched`),
 numeric status, and processing time in milliseconds. Request summaries omit
 actual paths, query strings, IP addresses, headers, and bodies. Pagelet
-events exclude passwords, tokens, cookies, and Markdown.
+events exclude passwords, tokens, cookies, and Markdown. Pagelet suppresses
+MCP SDK logs at all levels because they can include complete tool payloads.
 
 ## Verify
 

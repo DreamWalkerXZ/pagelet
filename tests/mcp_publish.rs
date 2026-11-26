@@ -50,7 +50,7 @@ async fn publishes_a_named_page_as_an_ordinary_user() {
 
 #[tokio::test]
 async fn publishes_with_a_generated_slug_and_an_external_reader_link() {
-    let server = TestServer::start(true, Some("https://pages.example:8443/")).await;
+    let server = TestServer::start(true, Some("https://pages.example:8443/configured/path")).await;
     let alice = server.user("alice").await;
     let client = server.connect(&alice).await;
 
@@ -63,6 +63,17 @@ async fn publishes_with_a_generated_slug_and_an_external_reader_link() {
     assert_eq!(content["version"], 1);
     assert_eq!(content["url"], format!("https://pages.example:8443/{slug}"));
 
+    let reader_url = reqwest::Url::parse(content["url"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        server
+            .client
+            .get(format!("{}{}", server.base_url, reader_url.path()))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
     let raw = server
         .client
         .get(format!("{}/_/raw/{slug}", server.base_url))
