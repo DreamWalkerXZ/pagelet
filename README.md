@@ -26,6 +26,31 @@ curl http://127.0.0.1:8080/_/openapi.json
 
 `GET /_/api/v1/me` returns only the account ID, username, and role. Passwords are stored as salted Argon2id verifiers; random 256-bit API tokens are stored only as SHA-256 hashes. Keep the data directory and token private. Deploy public HTTP behind an HTTPS reverse proxy. Configure the external URL and proxy trust explicitly as described below.
 
+## MCP
+
+Enable Streamable HTTP at `/_/mcp` with `pagelet serve --mcp` or
+`PAGELET_MCP=true`. The endpoint requires a Pagelet API token as a bearer
+credential on every request. Resetting the token revokes the previous one.
+For remote access, use the [HTTPS reverse proxy setup](#https-reverse-proxy-deployment)
+and set `--external-url` to the public URL. Native clients may omit `Origin`.
+If a client sends it, the scheme, host and port must match the configured
+external URL.
+
+Add the following to [Codex's configuration](https://developers.openai.com/codex/mcp)
+and set `PAGELET_TOKEN` to your Pagelet API token in the environment that
+launches Codex. For remote access, replace the URL with your public HTTPS
+endpoint.
+
+```toml
+[mcp_servers.pagelet]
+url = "http://127.0.0.1:8080/_/mcp"
+bearer_token_env_var = "PAGELET_TOKEN"
+```
+
+`list_pages` returns manageable page metadata. Use `search` for a substring
+of the slug and `page` and `per_page` for pagination. Ordinary users see
+their own pages. Administrators can list all pages or filter by `owner_id`.
+
 ## Docker
 
 The [Docker Hub image](https://hub.docker.com/r/dreamwalkerxz/pagelet) supports Linux amd64 and arm64. Pin `dreamwalkerxz/pagelet:0.2.0` to this release or use `dreamwalkerxz/pagelet:latest` for the latest stable release.

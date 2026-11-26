@@ -263,12 +263,17 @@ pub(crate) async fn verify_password(
         .into_response())
 }
 
-#[derive(Default, Deserialize)]
+#[derive(Default, Deserialize, rmcp::schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PageQuery {
+    /// Match slugs containing this text.
     search: Option<String>,
+    /// Restrict the list to a specific owner. Administrators may specify any owner.
     owner_id: Option<i64>,
+    /// One-based page number. Defaults to 1.
     page: Option<u64>,
+    /// Results per page. Defaults to 20 and is capped at 100.
     per_page: Option<u64>,
 }
 
@@ -279,6 +284,14 @@ pub(crate) async fn list(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let account = authenticated_user(&state, &headers)?;
     let Query(query) = query.map_err(|_| StatusCode::BAD_REQUEST)?;
+    list_pages(&state, &account, query).map(Json)
+}
+
+pub(crate) fn list_pages(
+    state: &AppState,
+    account: &crate::Account,
+    query: PageQuery,
+) -> Result<serde_json::Value, StatusCode> {
     if account.role != "administrator" && query.owner_id.is_some_and(|id| id != account.id) {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -301,9 +314,7 @@ pub(crate) async fn list(
         })?.collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(serde_json::json!({"pages":pages,"total":total,"page":page,"per_page":per_page}))
     })();
-    result
-        .map(Json)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+    result.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 pub(crate) fn random_slug() -> String {

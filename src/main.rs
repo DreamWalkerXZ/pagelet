@@ -26,6 +26,8 @@ enum Command {
         listen: String,
         #[arg(long, env = "PAGELET_EXTERNAL_URL")]
         external_url: Option<String>,
+        #[arg(long, env = "PAGELET_MCP", help = "Enable the MCP endpoint")]
+        mcp: bool,
         #[arg(long, env = "PAGELET_TRUSTED_PROXIES", value_delimiter = ',')]
         trusted_proxy: Vec<String>,
     },
@@ -129,6 +131,7 @@ async fn main() -> Result<()> {
         Command::Serve {
             listen,
             external_url,
+            mcp,
             trusted_proxy,
         } => {
             init_logging()?;
@@ -136,7 +139,8 @@ async fn main() -> Result<()> {
             state.deployment = pagelet::Deployment::new(
                 external_url.as_deref(),
                 trusted_proxy.iter().map(String::as_str),
-            )?;
+            )?
+            .with_mcp(mcp);
             bootstrap_administrator(&state)?;
             pagelet::serve(state, &listen).await?;
         }
