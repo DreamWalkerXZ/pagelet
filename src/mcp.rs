@@ -35,8 +35,33 @@ struct PageletMcp {
     tool_router: ToolRouter<Self>,
 }
 
+#[derive(serde::Deserialize, rmcp::schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+#[serde(deny_unknown_fields)]
+struct ReadPage {
+    /// The immutable Page ID returned by list_pages.
+    id: i64,
+}
+
 #[tool_router]
 impl PageletMcp {
+    #[tool(
+        description = "Read the Markdown and current version of a manageable Pagelet page by its immutable Page ID.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn read_page(
+        &self,
+        Parameters(ReadPage { id }): Parameters<ReadPage>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let headers = request_headers(&context)?;
+        let result = pages::read_management_page(&self.state, id, headers);
+        Ok(match result {
+            Ok(page) => CallToolResult::structured(pages::read_page_content(page)),
+            Err(status) => tool_error(status),
+        })
+    }
+
     #[tool(
         description = "List manageable Pagelet page metadata by slug search and page number.",
         annotations(read_only_hint = true, open_world_hint = false)
