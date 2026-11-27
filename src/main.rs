@@ -1,12 +1,12 @@
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use pagelet::AppState;
 use std::{
-    env,
+    env, fs,
     io::{self, IsTerminal, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{EnvFilter, filter::filter_fn, prelude::*};
 
 #[derive(Parser)]
 #[command(version, about = "Self-hosted Markdown publishing")]
@@ -29,6 +29,30 @@ enum Command {
         #[arg(long, env = "PAGELET_TRUSTED_PROXIES", value_delimiter = ',')]
         trusted_proxy: Vec<String>,
     },
+}
+
+#[derive(serde::Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct ServerConfig {
+    mcp: bool,
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self { mcp: true }
+    }
+}
+
+fn load_server_config(data_dir: &Path) -> Result<ServerConfig> {
+    let path = data_dir.join("config.json");
+    let contents = match fs::read(&path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Ok(ServerConfig::default());
+        }
+        Err(error) => return Err(error).with_context(|| format!("Read {}", path.display())),
+    };
+    serde_json::from_slice(&contents).with_context(|| format!("Parse {}", path.display()))
 }
 
 fn read_input(prompt: &str, hidden: bool) -> Result<String> {
@@ -58,12 +82,19 @@ fn init_logging() -> Result<()> {
         _ => Ok(EnvFilter::new(DEFAULT_FILTER)),
     };
     let invalid = configured.is_err();
-    tracing_subscriber::fmt()
-        .with_env_filter(configured.unwrap_or_else(|_| EnvFilter::new(DEFAULT_FILTER)))
-        .with_writer(io::stderr)
-        .with_ansi(
-            io::stderr().is_terminal()
-                && std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty()),
+    tracing_subscriber::registry()
+        .with(configured.unwrap_or_else(|_| EnvFilter::new(DEFAULT_FILTER)))
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(io::stderr)
+                .with_ansi(
+                    io::stderr().is_terminal()
+                        && std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty()),
+                )
+                // The SDK can log complete tool requests and responses.
+                .with_filter(filter_fn(|metadata| {
+                    metadata.target() != "rmcp" && !metadata.target().starts_with("rmcp::")
+                })),
         )
         .try_init()
         .map_err(anyhow::Error::msg)?;
@@ -132,11 +163,13 @@ async fn main() -> Result<()> {
             trusted_proxy,
         } => {
             init_logging()?;
+            let config = load_server_config(&cli.data_dir)?;
             let mut state = state;
             state.deployment = pagelet::Deployment::new(
                 external_url.as_deref(),
                 trusted_proxy.iter().map(String::as_str),
-            )?;
+            )?
+            .with_mcp(config.mcp);
             bootstrap_administrator(&state)?;
             pagelet::serve(state, &listen).await?;
         }

@@ -19,13 +19,13 @@ pub(crate) fn page_conflict(code: &'static str) -> Response {
 
 #[derive(Serialize)]
 pub(crate) struct Page {
-    id: i64,
-    slug: String,
+    pub(crate) id: i64,
+    pub(crate) slug: String,
     markdown: String,
     owner_id: i64,
     created_at: i64,
     updated_at: i64,
-    version: i64,
+    pub(crate) version: i64,
     #[serde(skip)]
     access_password_hash: Option<String>,
 }
@@ -46,9 +46,20 @@ fn row_page(row: &rusqlite::Row<'_>) -> rusqlite::Result<Page> {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct CreatePage {
-    markdown: String,
-    slug: Option<String>,
-    access_password: Option<String>,
+    pub(crate) markdown: String,
+    pub(crate) slug: Option<String>,
+    pub(crate) access_password: Option<String>,
+}
+
+pub(crate) enum PageMutationError {
+    Status(StatusCode),
+    Conflict(&'static str),
+}
+
+impl From<StatusCode> for PageMutationError {
+    fn from(status: StatusCode) -> Self {
+        Self::Status(status)
+    }
 }
 
 pub(crate) async fn create(
@@ -64,11 +75,28 @@ pub(crate) async fn create(
             StatusCode::BAD_REQUEST
         }
     })?;
+    match create_page(&state, &headers, body) {
+        Ok(page) => Ok((
+            StatusCode::CREATED,
+            [(header::CACHE_CONTROL, "no-store")],
+            Json(page),
+        )
+            .into_response()),
+        Err(PageMutationError::Conflict(code)) => Ok(page_conflict(code)),
+        Err(PageMutationError::Status(status)) => Err(status),
+    }
+}
+
+pub(crate) fn create_page(
+    state: &AppState,
+    headers: &HeaderMap,
+    body: CreatePage,
+) -> Result<Page, PageMutationError> {
     if body.markdown.len() > 1024 * 1024 {
-        return Err(StatusCode::PAYLOAD_TOO_LARGE);
+        return Err(StatusCode::PAYLOAD_TOO_LARGE.into());
     }
     if body.slug.as_ref().is_some_and(|slug| !valid_slug(slug)) {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(StatusCode::BAD_REQUEST.into());
     }
     let password_hash = password_hash(body.access_password.as_deref())?;
     let mut db = state
@@ -78,7 +106,7 @@ pub(crate) async fn create(
     let tx = db
         .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let account = crate::authenticated_user_in(&tx, &headers, (state.clock)())?;
+    let account = crate::authenticated_user_in(&tx, headers, (state.clock)())?;
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -94,12 +122,12 @@ pub(crate) async fn create(
                 tx.commit().map_err(|_|StatusCode::INTERNAL_SERVER_ERROR)?;
                 drop(db);
                 tracing::info!(event = %"page_published", page_id = page.id, actor_id = account.id);
-                return Ok((StatusCode::CREATED, [(header::CACHE_CONTROL, "no-store")], Json(page)).into_response());
+                return Ok(page);
             }
             Err(rusqlite::Error::SqliteFailure(error, _)) if error.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE => {
-                if body.slug.is_some() { return Ok(page_conflict("slug_taken")); }
+                if body.slug.is_some() { return Err(PageMutationError::Conflict("slug_taken")); }
             }
-            Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+            Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR.into()),
         }
     }
 }
@@ -263,12 +291,17 @@ pub(crate) async fn verify_password(
         .into_response())
 }
 
-#[derive(Default, Deserialize)]
+#[derive(Default, Deserialize, rmcp::schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PageQuery {
+    /// Match slugs containing this text.
     search: Option<String>,
+    /// Restrict the list to a specific owner. Administrators may specify any owner.
     owner_id: Option<i64>,
+    /// One-based page number. Defaults to 1.
     page: Option<u64>,
+    /// Results per page. Defaults to 20 and is capped at 100.
     per_page: Option<u64>,
 }
 
@@ -279,6 +312,14 @@ pub(crate) async fn list(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let account = authenticated_user(&state, &headers)?;
     let Query(query) = query.map_err(|_| StatusCode::BAD_REQUEST)?;
+    list_pages(&state, &account, query).map(Json)
+}
+
+pub(crate) fn list_pages(
+    state: &AppState,
+    account: &crate::Account,
+    query: PageQuery,
+) -> Result<serde_json::Value, StatusCode> {
     if account.role != "administrator" && query.owner_id.is_some_and(|id| id != account.id) {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -301,9 +342,7 @@ pub(crate) async fn list(
         })?.collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(serde_json::json!({"pages":pages,"total":total,"page":page,"per_page":per_page}))
     })();
-    result
-        .map(Json)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+    result.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 pub(crate) fn random_slug() -> String {
@@ -317,10 +356,10 @@ pub(crate) fn random_slug() -> String {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct EditPage {
-    version: i64,
-    markdown: Option<String>,
-    slug: Option<String>,
-    access_password: Option<String>,
+    pub(crate) version: i64,
+    pub(crate) markdown: Option<String>,
+    pub(crate) slug: Option<String>,
+    pub(crate) access_password: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -346,16 +385,33 @@ pub(crate) async fn management_read(
     Path(id): Path<i64>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
+    Ok((
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(read_management_page(&state, id, &headers)?),
+    )
+        .into_response())
+}
+
+pub(crate) fn read_management_page(
+    state: &AppState,
+    id: i64,
+    headers: &HeaderMap,
+) -> Result<Page, StatusCode> {
     let db = state
         .db
         .lock()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let account = crate::authenticated_user_in(&db, &headers, (state.clock)())?;
-    Ok((
-        [(header::CACHE_CONTROL, "no-store")],
-        Json(management_page(&db, id, &account)?),
-    )
-        .into_response())
+    let account = crate::authenticated_user_in(&db, headers, (state.clock)())?;
+    management_page(&db, id, &account)
+}
+
+pub(crate) fn read_page_content(page: Page) -> serde_json::Value {
+    serde_json::json!({
+        "id": page.id,
+        "slug": page.slug,
+        "markdown": page.markdown,
+        "version": page.version,
+    })
 }
 
 pub(crate) async fn edit(
@@ -371,15 +427,28 @@ pub(crate) async fn edit(
             StatusCode::BAD_REQUEST
         }
     })?;
+    match edit_page(&state, id, &headers, body) {
+        Ok(page) => Ok(([(header::CACHE_CONTROL, "no-store")], Json(page)).into_response()),
+        Err(PageMutationError::Conflict(code)) => Ok(page_conflict(code)),
+        Err(PageMutationError::Status(status)) => Err(status),
+    }
+}
+
+pub(crate) fn edit_page(
+    state: &AppState,
+    id: i64,
+    headers: &HeaderMap,
+    body: EditPage,
+) -> Result<Page, PageMutationError> {
     if body
         .markdown
         .as_ref()
         .is_some_and(|text| text.len() > 1024 * 1024)
     {
-        return Err(StatusCode::PAYLOAD_TOO_LARGE);
+        return Err(StatusCode::PAYLOAD_TOO_LARGE.into());
     }
     if body.slug.as_ref().is_some_and(|slug| !valid_slug(slug)) || body.version < 1 {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(StatusCode::BAD_REQUEST.into());
     }
     let new_hash = password_hash(body.access_password.as_deref())?;
     let mut db = state
@@ -389,13 +458,13 @@ pub(crate) async fn edit(
     let tx = db
         .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let account = crate::authenticated_user_in(&tx, &headers, (state.clock)())?;
+    let account = crate::authenticated_user_in(&tx, headers, (state.clock)())?;
     let mut page = management_page(&tx, id, &account)?;
     if page.version != body.version {
-        return Ok(page_conflict("stale_version"));
+        return Err(PageMutationError::Conflict("stale_version"));
     }
     if body.markdown.is_none() && body.slug.is_none() && body.access_password.is_none() {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(StatusCode::BAD_REQUEST.into());
     }
     if let Some(markdown) = body.markdown {
         page.markdown = markdown;
@@ -420,12 +489,12 @@ pub(crate) async fn edit(
     ) {
         if matches!(error, rusqlite::Error::SqliteFailure(error, _)
             if error.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE) {
-            return Ok(page_conflict("slug_taken"));
+            return Err(PageMutationError::Conflict("slug_taken"));
         }
-        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        return Err(StatusCode::INTERNAL_SERVER_ERROR.into());
     }
     tx.commit().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(([(header::CACHE_CONTROL, "no-store")], Json(page)).into_response())
+    Ok(page)
 }
 
 pub(crate) async fn delete(

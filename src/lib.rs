@@ -1,5 +1,6 @@
 mod deployment;
 pub use deployment::Deployment;
+mod mcp;
 mod ownership;
 mod pages;
 mod sessions;
@@ -257,7 +258,7 @@ async fn me(
 }
 
 pub fn router(state: AppState) -> Router {
-    Router::new()
+    let mut router = Router::new()
         .merge(web::routes())
         .route("/_/api/v1/me", get(me))
         .merge(sessions::routes())
@@ -283,7 +284,11 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/_/raw/{slug}", get(pages::raw))
         .route("/_/openapi.json", get(|| async { Json(openapi()) }))
-        .layer(axum::middleware::from_fn(sessions::csrf))
+        .layer(axum::middleware::from_fn(sessions::csrf));
+    if !state.deployment.mcp_disabled {
+        router = router.merge(mcp::routes(state.clone()));
+    }
+    router
         .layer(axum::middleware::from_fn(log_request))
         .with_state(state)
 }

@@ -26,6 +26,65 @@ curl http://127.0.0.1:8080/_/openapi.json
 
 `GET /_/api/v1/me` returns only the account ID, username, and role. Passwords are stored as salted Argon2id verifiers; random 256-bit API tokens are stored only as SHA-256 hashes. Keep the data directory and token private. Deploy public HTTP behind an HTTPS reverse proxy. Configure the external URL and proxy trust explicitly as described below.
 
+## MCP
+
+Streamable HTTP is available at `/_/mcp` by default. To disable it, put
+`{"mcp": false}` in `config.json` in the Pagelet data directory and restart
+the service. In Docker, use `/data/config.json` on the persistent volume.
+The endpoint requires a Pagelet API token as a bearer
+credential on every request. Resetting the token revokes the previous one.
+For remote access, use the [HTTPS reverse proxy setup](#https-reverse-proxy-deployment)
+and set `--external-url` to the public site URL. MCP accepts requests whose
+`Host` names `localhost`, `127.0.0.1`, `[::1]` or the host configured in
+`--external-url`. Configure any non-loopback host in `--external-url` and
+have your proxy preserve the public `Host` header. Native clients may omit
+`Origin`. If a client sends it, the scheme, host and port must match the
+configured external URL.
+
+Add the following to [Codex's configuration](https://developers.openai.com/codex/mcp)
+and set `PAGELET_TOKEN` to your Pagelet API token in the environment that
+launches Codex. For remote access, replace the URL with your public HTTPS
+endpoint.
+
+```toml
+[mcp_servers.pagelet]
+url = "http://127.0.0.1:8080/_/mcp"
+bearer_token_env_var = "PAGELET_TOKEN"
+```
+
+`list_pages` returns manageable page metadata. Use `search` for a substring
+of the slug and `page` and `per_page` for pagination. Ordinary users see
+their own pages. Administrators can list all pages or filter by `owner_id`.
+
+`read_page` takes a Page ID (`id`) from `list_pages` and returns the page's
+`id`, `slug`, `markdown` and current `version`. Owners and administrators can
+read password-protected pages they manage.
+
+`publish_page` immediately publishes a public page from `markdown` and an
+optional `slug`. It returns `id`, `slug`, `version` and a reader `url`.
+The link uses `/<slug>` at the configured external origin, or a root-relative
+path when `--external-url` is unset.
+If the slug is already in use, the tool returns `slug_taken`.
+
+`edit_page` immediately edits a manageable page by `id`. Pass the `version`
+last returned by `read_page` and one or both of `markdown` and `slug`.
+The tool preserves omitted fields and the page's access password. It returns
+the same fields as `publish_page`. After a `stale_version` error, call
+`read_page` again and reconcile your changes before submitting another edit.
+A conflicting slug returns `slug_taken`.
+
+Add these per-tool settings to your
+[Codex configuration](https://learn.chatgpt.com/docs/config-file/config-reference)
+to prompt before publishing or editing.
+
+```toml
+[mcp_servers.pagelet.tools.publish_page]
+approval_mode = "prompt"
+
+[mcp_servers.pagelet.tools.edit_page]
+approval_mode = "prompt"
+```
+
 ## Docker
 
 The [Docker Hub image](https://hub.docker.com/r/dreamwalkerxz/pagelet) supports Linux amd64 and arm64. Pin `dreamwalkerxz/pagelet:0.2.0` to this release or use `dreamwalkerxz/pagelet:latest` for the latest stable release.
@@ -110,7 +169,8 @@ invalid log filters. DEBUG adds one summary per
 response with the HTTP method, matched route template (or `unmatched`),
 numeric status, and processing time in milliseconds. Request summaries omit
 actual paths, query strings, IP addresses, headers, and bodies. Pagelet
-events exclude passwords, tokens, cookies, and Markdown.
+events exclude passwords, tokens, cookies, and Markdown. Pagelet suppresses
+MCP SDK logs at all levels because they can include complete tool payloads.
 
 ## Verify
 

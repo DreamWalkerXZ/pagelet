@@ -4,7 +4,8 @@ use std::net::IpAddr;
 
 #[derive(Clone, Default)]
 pub struct Deployment {
-    secure: bool,
+    external_url: Option<Uri>,
+    pub(crate) mcp_disabled: bool,
     trusted: Vec<(IpAddr, u8)>,
 }
 impl Deployment {
@@ -21,7 +22,7 @@ impl Deployment {
             {
                 bail!("External URL must be an absolute HTTP or HTTPS URL without credentials");
             }
-            deployment.secure = uri.scheme_str() == Some("https");
+            deployment.external_url = Some(uri);
         }
         for proxy in proxies {
             let (ip, prefix) = match proxy.split_once('/') {
@@ -37,6 +38,15 @@ impl Deployment {
         }
         Ok(deployment)
     }
+    pub fn with_mcp(mut self, enabled: bool) -> Self {
+        self.mcp_disabled = !enabled;
+        self
+    }
+
+    pub(crate) fn external_url(&self) -> Option<&Uri> {
+        self.external_url.as_ref()
+    }
+
     fn trusts(&self, ip: IpAddr) -> bool {
         self.trusted
             .iter()
@@ -87,6 +97,10 @@ impl Deployment {
         Ok(source.to_string())
     }
     pub(crate) fn cookie_suffix(&self) -> &'static str {
-        if self.secure { "; Secure" } else { "" }
+        if self.external_url().and_then(Uri::scheme_str) == Some("https") {
+            "; Secure"
+        } else {
+            ""
+        }
     }
 }
